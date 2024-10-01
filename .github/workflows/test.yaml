@@ -11,6 +11,11 @@ on:
   workflow_call: # to make the workflow triggerable from other workflows (publish.yaml)
   workflow_dispatch: # to make the workflow triggerable manually
 
+# Sets permissions of the GITHUB_TOKEN to allow smokeshow to set the coverage as commit
+# status:
+permissions:
+  pull-requests: write
+
 # The workflow:
 jobs:
   lint:
