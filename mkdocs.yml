@@ -1,0 +1,107 @@
+site_name: FastFEM
+site_description: A Python package for solving PDEs with the finite element method and automatic differentiation.
+site_author: FastFEM Developers
+copyright: Copyright &copy; 2023 - 2024 FastFEM Developers
+site_url: https://sinatay.github.io/fastfem/
+repo_url: https://github.com/sinaatalay/fastfem/
+repo_name: sinaatalay/fastfem
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  language: en
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/lightbulb-outline
+        name: "Switch to dark mode"
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/lightbulb
+        name: "Switch to light mode"
+
+  font:
+    text: Roboto
+    code: Roboto Mono
+
+  features:
+    - content.code.copy # the copy-to-clipboard buttons for code blocks
+    - content.action.view # view source button for pages
+    - content.action.edit # edit source button for pages
+    - navigation.footer # the previous and next buttons in the footer
+    - navigation.indexes # allow mother pages to have their own index pages
+    - navigation.instant # instant navigation for faster page loads
+    - navigation.instant.prefetch # prefetch pages for instant navigation
+    - navigation.instant.progress # show progress bar for instant navigation
+    - navigation.top # back to top button
+    - search.highlight # highlight search results after going to a page
+    - search.suggest # show search suggestions while typing
+    - search.share # share search results with others
+    - toc.follow # if toc sidebar doesn't fit, scroll to the active heading
+    - content.code.annotate # allow annotations in code blocks
+    - content.tabs.link # switch all the content tabs to the same label
+
+markdown_extensions:
+  # see https://facelessuser.github.io/pymdown-extensions/extensions/inlinehilite/ for more pymdownx info
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.extra:
+      pymdownx.superfences:
+        custom_fences:
+          - name: mermaid
+            class: mermaid
+            format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed: # content tabs
+      alternate_style: true
+  - toc:
+      permalink: true
+      title: Page contents
+  - admonition # blocks like note, warning, tip, etc.
+  - footnoes # for citations
+  - attr_list # allow assigning HTML attributes to elements
+  - md_in_html # allow markdown inside HTML tags
+  - pymdownx.pathconverter # convert relative paths to absolute paths
+  - pymdownx.betterem # to avoid LaTeX conflicts
+
+plugins:
+  - search
+  - macros: # mkdocs-macros-plugin
+      module_name: docs/update_entry_figures
+  - mkdocstrings:
+      handlers:
+        python:
+          paths:
+            - rendercv
+          options:
+            members_order: source
+            show_bases: true
+            docstring_section_style: list
+            docstring_style: google
+
+  - bibtex: # https://github.com/shyamd/mkdocs-bibtex
+      bib_file: src/assets/bibliography.bib
+      bib_by_default: false
+
+  - caption: # https://github.com/tobiasah/mkdocs-caption
+      table:
+        position: top
+
+  - macros: # https://github.com/fralau/mkdocs-macros-plugin
+      module_name: src/assets/data/data
+
+extra_javascript:
+  - assets/javascripts/katex.js
+  - https://unpkg.com/katex@0/dist/katex.min.js
+  - https://unpkg.com/katex@0/dist/contrib/auto-render.min.js
+
+extra_css:
+  - https://unpkg.com/katex@0/dist/katex.min.css
