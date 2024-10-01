@@ -1,0 +1,115 @@
+name: Test
+
+# GitHub events that triggers the workflow:
+on:
+  push:
+    branches:
+      - "main" # Run on push to the main branch
+  pull_request:
+    branches:
+      - "*" # Run on pull request to any branch
+  workflow_call: # to make the workflow triggerable from other workflows (publish.yaml)
+  workflow_dispatch: # to make the workflow triggerable manually
+
+# Sets permissions of the GITHUB_TOKEN to allow smokeshow to set the coverage as commit
+# status:
+permissions:
+  contents: read
+  statuses: write
+
+# The workflow:
+jobs:
+  lint:
+    name: Lint with Ruff (Py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Hatch
+        uses: pypa/hatch@install
+
+      - name: Lint with Ruff
+        run: |
+          hatch run lint
+
+  test:
+    name: Test with Py${{ matrix.python-version }} on ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu, windows, macos]
+        python-version: ["3.10", "3.11", "3.12"]
+
+    runs-on: ${{ matrix.os }}-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Hatch
+        uses: pypa/hatch@install
+
+      - name: Test
+        run: hatch run tests:coverage run -m pytest
+
+      - name: Rename the coverage file
+        run: mv .coverage .coverage.${{ matrix.python-version }}.${{ matrix.os }}
+
+      - name: Store coverage files
+        uses: actions/upload-artifact@v4
+        with:
+          include-hidden-files: true
+          name: coverage-${{ matrix.python-version }}-${{ matrix.os }}
+          path: .coverage.${{ matrix.python-version }}.${{ matrix.os }}
+
+  report-coverage:
+    name: Generate the coverage report
+    needs: [test]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download coverage files
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-* # download all the uploaded coverage reports
+          path: coverage
+          merge-multiple: true # download them in the same folder
+
+      - name: Install Hatch
+        uses: pypa/hatch@install
+
+      - name: Combine coverage files
+        run: |
+          hatch run tests:coverage combine coverage
+          hatch run tests:coverage report
+          hatch run tests:coverage html --show-contexts --title "FastFEM coverage for ${{ github.sha }}"
+
+      - name: Upload the coverage report to smokeshow
+        run: |
+          pip install smokeshow==0.4.0
+          smokeshow upload ./htmlcov
+        env:
+          SMOKESHOW_GITHUB_STATUS_DESCRIPTION: Coverage {coverage-percentage}
+          SMOKESHOW_GITHUB_COVERAGE_THRESHOLD: 97
+          SMOKESHOW_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SMOKESHOW_GITHUB_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}

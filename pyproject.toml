@@ -1,0 +1,192 @@
+# Every modern Python package today has a `pyproject.toml` file. It is a Python
+# standard. `pyproject.toml` file contains all the metadata about the package. It also
+# includes the dependencies and required information for building the package. For more
+# details, see https://pip.pypa.io/en/stable/reference/build-system/pyproject-toml/.
+
+[build-system]
+# If a code needs to be distributed, it might need to be compiled, or it might need to
+# be bundled with other files. This process of making a code ready for distribution is
+# called building.
+
+# Python packages need to be built too, even though they are not compiled (mostly). At
+# the end of the building process, a source distribution package (sdist) and a built
+# distribution package (in Wheel format) are created.
+# See https://packaging.python.org/en/latest/tutorials/packaging-projects/ for details.
+# Built Distribution:
+# https://packaging.python.org/en/latest/glossary/#term-Built-Distribution
+# Source Distribution:
+# https://packaging.python.org/en/latest/glossary/#term-Source-Distribution-or-sdist
+
+# To build this package, we need to specify which build package we want to use. There
+# are many build packages like `setuptools`, `flit`, `poetry`, `hatchling`, etc. We will
+# use `hatchling`.
+requires = [
+    "hatchling==1.25.0",
+] # List of packages that are needed to build the package
+
+# Python has a standard object format called build-backend object. Python standard asks
+# this object to have some specific methods that do a specific job. For example, it
+# should have a method called `build_wheel` that builds a wheel file. We use hatchling
+# to build the pockage, and hatchling's build-backend object is `hatchling.build`.
+# See https://peps.python.org/pep-0517/
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.sdist]
+# In the sdist, what do we want to exclude? 
+exclude = [".github/", ".devcontainer/"]
+
+[tool.hatch.build.targets.wheel]
+# In wheel, what do we want to include and exclude?
+packages = ["fastfem"]
+
+[tool.hatch.version]
+# We will use hatchling to generate the version number. It will go to the `path` below
+# and get the version number from there.
+# See https://hatch.pypa.io/latest/version/
+path = "fastfem/__init__.py"
+
+[project]
+# Under the `project` section, we specify the metadata about the package.
+authors = [
+    { name = 'Sina Atalay', email = 'dev@atalay.biz' },
+    { name = "Kentaro Hanson", email = "example@example.com" },
+    { name = "Sacha Escudier", email = "example@example.com" },
+]
+name = 'fastfem'
+description = 'A Python package for solving PDEs with the finite element method and automatic differentiation.'
+license = "Apache-2.0"
+readme = "README.md"
+requires-python = '>=3.12'
+# The package depends on the packages below. They will be installed automatically when
+# the package is installed by users.
+dependencies = ["jax==0.4.33", "matplotlib==3.9.2"]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Education",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+] # Go to https://pypi.org/classifiers/ to see all classifiers
+dynamic = [
+    "version",
+] # This is required for dynamic versioning, see https://hatch.pypa.io/latest/version/   
+
+[project.urls]
+# Here, we can specify the URLs related to the package. They will be listed under the
+# "Project links" section in PyPI. See https://pypi.org/project/fastfem
+Source = 'https://github.com/sinaatalay/fastfem'
+Documentation = 'https://sinatay.github.io/fastfem/'
+Changelog = 'https://sinatay.github.io/fastfem/changelog'
+
+# ======================================================================================
+# Virtual Environments Below ===========================================================
+# ======================================================================================
+
+# The package depends on other packages, which are listed under the `project` section as
+# `dependencies`. However, for the development of the package, we need some other
+# packages too (like `black`, `ruff`, `mkdocs`, etc.). We need these packages in our
+# virtual environments and we handle the environments with `hatchling`.
+
+# There will be three virtual environments: `default`, `docs`, and `test`.
+
+# `default` is the default virtual environment needed for developing the package.
+# `docs` is the virtual environment needed to build the documentation.
+# `tests` is the virtual environment needed to run the tests of the package.
+
+[tool.hatch.envs.default]
+# Dependencies to be installed in the `default` virtual environment.
+dependencies = [
+    "ruff",    # to lint the code
+    "black",   # to format the code
+    "ipython", # for ipython shell
+    "isort",   # to sort the imports  
+    "pyright", # to check the types
+]
+path = ".venv"
+[tool.hatch.envs.default.scripts]
+# Hatch allows us to define scripts that can be run in the activated virtual environment
+# with `hatch run ENV_NAME:SCRIPT_NAME`.
+# Format all the code with `black`:
+format = "black fastfem && black tests" # hatch run format
+# Lint the code with `ruff`:
+lint = "ruff check fastfem && ruff check tests" # hatch run lint
+# Sort the imports with `isort`:
+sort-imports = "isort fastfem && isort tests" # hatch run sort-imports
+# Check types with `pyright`:
+check-types = "pyright fastfem && pyright tests" # hatch run check-types
+
+[tool.hatch.envs.docs]
+# Dependencies to be installed in the `docs` virtual environment.
+dependencies = [
+    "mkdocs-material==9.5.34",     # to build docs
+    "mkdocstrings-python==1.11.1", # to build reference documentation from docstrings
+    "mkdocs-macros-plugin==1.0.5", # to be able to have dynamic content in the documentation
+]
+path = ".venv-docs"
+[tool.hatch.envs.docs.scripts]
+# Build the documentation with `mkdocs`:
+build = "mkdocs build --clean --strict" # hatch run docs:build
+# Start the development server for the documentation with `mkdocs`:
+serve = "mkdocs serve" # hatch run docs:serve
+
+[tool.hatch.envs.tests]
+# Dependencies to be installed in the `tests` virtual environment.
+dependencies = [
+    "pytest==8.3.2",        # to run the tests
+    "coverage==7.6.1",      # to generate coverage reports
+    "time-machine==2.15.0", # to select an arbitrary date and time for testing
+    "pypdf==4.3.1",         # to read PDF files
+]
+path = ".venv-tests"
+
+[tool.hatch.envs.tests.scripts]
+# Run the tests:
+run = "pytest" # hatch run tests:run  
+# Run the tests and generate the coverage report as HTML:
+run-and-report = "coverage run -m pytest && coverage report && coverage html --show-contexts" # hatch run tests:coverage
+
+# ======================================================================================
+# Virtual Environments Above ===========================================================
+# ======================================================================================
+
+# The package uses different tools to check the code quality, format the code, build the
+# documentation, build the package, etc. We can specify the settings for these tools in
+# `pyproject.toml` file under `[tool.name_of_the_tool]` so that new contributors can use
+# these tools easily. Generally, popular IDEs grab these settings from `pyproject.toml`
+# file automatically.
+
+[tool.ruff]
+output-format = "github"
+
+[tool.black]
+line-length = 88 # maximum line length
+preview = true # to allow enable-unstable-feature
+enable-unstable-feature = [
+    "string_processing",
+] # to break strings into multiple lines
+
+[tool.isort]
+profile = "black"
+
+[tool.pyright]
+# No options are needed for `pyright` for now.
+
+[tool.coverage.run]
+source = ['fastfem'] # The source to measure during execution
+
+# Use relative paths instead of absolute paths, this is useful for combining coverage
+# reports from different OSes:
+relative_files = true
+
+[tool.coverage.report]
+# Don't include these lines in the coverage report:
+exclude_lines = ["if __name__ == .__main__.:"]
+
+
+[tool.pytest.ini_options]
+addopts = [
+    "-ra",              # Show extra test summary info for all tests
+    "--strict-markers", # Don't allow unknown markers
+    "--strict-config",  # Always fail if there are unknown configuration options
+]
+testpaths = ["tests"]
