@@ -4,7 +4,7 @@ name: Test
 on:
   push:
     branches:
-      - "*" # Run on push to any branch
+      - "main" # Run on push to the main branch
   pull_request:
     branches:
       - "*" # Run on pull request to any branch
