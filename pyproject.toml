@@ -118,9 +118,11 @@ check-types = "pyright fastfem && pyright tests" # hatch run check-types
 [tool.hatch.envs.docs]
 # Dependencies to be installed in the `docs` virtual environment.
 dependencies = [
-    "mkdocs-material==9.5.34",     # to build docs
+    "mkdocs-material==9.5.39",     # docs engine and theme
     "mkdocstrings-python==1.11.1", # to build reference documentation from docstrings
-    "mkdocs-macros-plugin==1.0.5", # to be able to have dynamic content in the documentation
+    "mkdocs-macros-plugin==1.2.0", # to be able to have dynamic content in the documentation
+    "mkdocs-caption==1.2.0",       # for captions and cross-references
+    "mkdocs-bibtex==2.16.2",       # for citations with BibTeX
 ]
 path = ".venv-docs"
 [tool.hatch.envs.docs.scripts]
