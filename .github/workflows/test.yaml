@@ -94,9 +94,9 @@ jobs:
 
       - name: Combine coverage files
         run: |
-          hatch run test:coverage combine coverage
-          hatch run test:coverage report
-          hatch run test:coverage html --show-contexts --title "FastFEM coverage for ${{ github.sha }}"
+          hatch run tests:coverage combine coverage
+          hatch run tests:coverage report
+          hatch run tests:coverage html --show-contexts --title "FastFEM coverage for ${{ github.sha }}"
 
       - name: Upload the coverage report to smokeshow
         run: |
