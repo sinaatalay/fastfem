@@ -7,6 +7,15 @@ repo_url: https://github.com/sinaatalay/fastfem/
 repo_name: sinaatalay/fastfem
 edit_uri: edit/main/docs/
 
+nav:
+  - Home: index.md
+  - User Guide: user_guide/index.md
+  - Developer Guide:
+      - Developer Guide: developer_guide/index.md
+      - Writing Documentation: developer_guide/writing_documentation.md
+  - API Reference: api_reference/index.md
+  - Changelog: changelog.md
+
 theme:
   name: material
   language: en
@@ -65,8 +74,8 @@ markdown_extensions:
   - toc:
       permalink: true
       title: Page contents
+  - footnotes # for citations
   - admonition # blocks like note, warning, tip, etc.
-  - footnoes # for citations
   - attr_list # allow assigning HTML attributes to elements
   - md_in_html # allow markdown inside HTML tags
   - pymdownx.pathconverter # convert relative paths to absolute paths
@@ -74,8 +83,6 @@ markdown_extensions:
 
 plugins:
   - search
-  - macros: # mkdocs-macros-plugin
-      module_name: docs/update_entry_figures
   - mkdocstrings:
       handlers:
         python:
@@ -88,15 +95,12 @@ plugins:
             docstring_style: google
 
   - bibtex: # https://github.com/shyamd/mkdocs-bibtex
-      bib_file: src/assets/bibliography.bib
+      bib_file: docs/assets/bibliography.bib
       bib_by_default: false
 
   - caption: # https://github.com/tobiasah/mkdocs-caption
       table:
         position: top
-
-  - macros: # https://github.com/fralau/mkdocs-macros-plugin
-      module_name: src/assets/data/data
 
 extra_javascript:
   - assets/javascripts/katex.js
