@@ -14,7 +14,7 @@ on:
 # Sets permissions of the GITHUB_TOKEN to allow smokeshow to set the coverage as commit
 # status:
 permissions:
-  pull-requests: write
+  statuses: write
 
 # The workflow:
 jobs:
