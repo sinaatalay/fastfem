@@ -139,11 +139,11 @@ dependencies = [
 ]
 path = ".venv-tests"
 
-[tool.hatch.envs.test.scripts]
+[tool.hatch.envs.tests.scripts]
 # Run the tests:
 run = "pytest" # hatch run tests:run  
 # Run the tests and generate the coverage report as HTML:
-run-and-report = "coverage run -m pytest && coverage report && coverage html --show-contexts" # hatch run test:coverage
+run-and-report = "coverage run -m pytest && coverage report && coverage html --show-contexts" # hatch run tests:coverage
 
 # ======================================================================================
 # Virtual Environments Above ===========================================================
