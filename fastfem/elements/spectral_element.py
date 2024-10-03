@@ -1,6 +1,6 @@
 import numpy as np
-import _poly_util as GLL_UTIL
-import element
+import fastfem.elements._poly_util as GLL_UTIL
+import fastfem.elements.element as element
 import scipy as sp
 
 class SpectralElement2D(element.Element):
@@ -12,7 +12,7 @@ class SpectralElement2D(element.Element):
         self.degree = degree
         self.knots = GLL_UTIL.get_GLL_knots(degree)
         self.weights = GLL_UTIL.get_GLL_weights(degree)
-        self.lagrange_polys = np.array(GLL_UTIL.build_lagrange_polys(degree))
+        self.lagrange_polys = np.array(GLL_UTIL.build_GLL_polys(degree))
 
     
     def reference_to_real(self,pos_matrix,X,Y):
