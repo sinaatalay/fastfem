@@ -87,20 +87,24 @@ def ref_coords_arr(request):
 
 #===================
 
-@pytest.mark.skip
-def test_transformations_shape(transformation,ref_coords_arr):
-  assert transformation(ref_coords_arr).shape == ref_coords_arr.shape
-
-@pytest.mark.skip
-def test_reference_to_real_not_arr(transformed_element,ref_coords):
-  elem = transformed_element[0]; points = transformed_element[1]; transformation = transformed_element[2]
-  
-  true_pos = transformation(ref_coords)
-  np.testing.assert_almost_equal(elem.reference_to_real(points,ref_coords[0],ref_coords[1]),true_pos)
-
 #@pytest.mark.skip
 def test_reference_to_real(transformed_element,ref_coords_arr):
   elem = transformed_element[0]; points = transformed_element[1]; transformation = transformed_element[2]
   
   true_pos = transformation(ref_coords_arr)
   np.testing.assert_almost_equal(elem.reference_to_real(points,*[v.squeeze(-1) for v in np.split(ref_coords_arr,2,axis=-1)]),true_pos)
+
+
+def test_real_to_reference_interior(transformed_element,ref_coords):
+  elem = transformed_element[0]; points = transformed_element[1]; transformation = transformed_element[2]
+  
+  true_pos = transformation(ref_coords)
+
+  recover_ref = elem.locate_point(points,true_pos[0],true_pos[1],tol=1e-10,ignore_out_of_bounds = True)
+  assert recover_ref[1], "Test with ignore_out_of_bounds flag. Should be True for point being found (loss(recover_ref) < tol)."
+  np.testing.assert_almost_equal(recover_ref[0],ref_coords,err_msg="Test with ignore_out_of_bounds flag")
+
+
+  recover_ref = elem.locate_point(points,true_pos[0],true_pos[1],tol=1e-10,ignore_out_of_bounds = False)
+  assert recover_ref[1], "Test without ignore_out_of_bounds flag. Should be True for point being found (loss(recover_ref) < tol)."
+  np.testing.assert_almost_equal(recover_ref[0],ref_coords,err_msg="Test without ignore_out_of_bounds flag")

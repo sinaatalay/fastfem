@@ -3,6 +3,16 @@ import fastfem.elements._poly_util as GLL_UTIL
 import fastfem.elements.element as element
 import scipy as sp
 
+
+class DeformationGradient2DBadnessException(Exception):
+    def __init__(self, val,x,y):            
+        super().__init__("Element has too poor of a shape!\n"+
+                    f"   def_grad badness = {val:e} at "+
+                    f"({x:.6f},{y:.6f})")
+            
+        # Now for your custom code...
+        self.x = x; self.y = y; self.val = val
+
 class SpectralElement2D(element.Element):
     """A spectral element in 2 dimensions of order N, leading to (N+1)^2 nodes.
     GLL quadrature is used to diagonalize the mass matrix.
@@ -34,6 +44,164 @@ class SpectralElement2D(element.Element):
         return np.einsum("ijk,ia,...a,jb,...b->...k",pos_matrix,
             self.lagrange_polys,np.expand_dims(X,-1) ** np.arange(Np1),
             self.lagrange_polys,np.expand_dims(Y,-1) ** np.arange(Np1))
+
+    def locate_point(self,pos_matrix, posx,posy, tol=1e-8, dmin = 1e-7,
+                     def_grad_badness_tol = 1e-4, ignore_out_of_bounds = False):
+        """Attempts to find the local coordinates corresponding to the
+        given global coordinates (posx,posy). Returns (local_pt,success).
+        If a point is found, the returned value is ((x,y),True),
+        with local coordinates (x,y).
+        Otherwise, there are two cases:
+          - ((x,y),False) is returned when descent leads out of the
+            domain. A step is forced to stay within the local domain
+            (max(|x|,|y|) <= 1), but if a constrained minimum is found on an
+            edge with a descent direction pointing outwards, that point
+            is returned. If ignore_out_of_bounds is true, the interior checking
+            does not occur.
+          - ((x,y),False) is returned if a local minimum is found inside the
+            domain, but the local->global transformation is too far. This
+            should technically not occur if the the deformation gradient stays
+            nonsingular, but in the case of ignore_out_of_bounds == True, the
+            everywhere-invertibility may not hold.
+
+        The initial guess is chosen as the closest node, and a Newton-Raphson
+        step is used along-side a descent algorithm. tol is the stopping parameter
+        triggering when the error function (ex^2 + ey^2)/2 < tol in global
+        coordinates. dmin is the threshold for when a directional derivative
+        is considered zero, providing the second stopping criterion.
+
+        def_grad_badness_tol parameterizes the angle between coordinate
+        vectors. If the coordinate vectors line up close enough
+        ( abs(sin(theta)) > def_grad_badness_tol ), then an exception is raised.
+        This is to ensure that the elements are regularly shaped enough.
+        """
+        
+        Np1 = self.degree + 1
+        target = np.array((posx,posy))
+        node_errs = np.sum((pos_matrix-target)**2,axis=-1)
+        mindex = np.unravel_index(np.argmin(node_errs),(Np1,Np1))
+        
+        #local coords of guess
+        local = np.array((self.knots[mindex[0]],self.knots[mindex[1]]))
+
+        # position poly
+        # sum(x^{i,j} L_{i,j}) -> [dim,k,l] (coefficient of cx^ky^l for dim)
+        x_poly = np.einsum("ijd,ik,jl->dkl",pos_matrix,
+                           self.lagrange_polys,self.lagrange_polys)
+        
+        #local to global
+        def l2g(local):
+            return np.einsum("dkl,k,l->d",x_poly,
+                    local[0]**np.arange(Np1),local[1]**np.arange(Np1))
+        e = l2g(local) - target
+        F = 0.5*np.sum(e**2)
+
+            
+        # linsearch on gradient descent
+        def linsearch(r,step):
+            ARMIJO = 0.25
+            err = l2g(local + r*step) - target
+            F_new = 0.5*np.sum(err**2)
+            while F_new > F + (ARMIJO * step) * drF:
+                step *= 0.5
+                err[:] = l2g(local + r*step) - target
+                F_new = 0.5*np.sum(err**2)
+            return F_new,step
+        
+        def clamp_and_maxstep(r):
+            #out of bounds check; biggest possible step is to the boundary;
+            #note: uses local[]. Additionally r[] is pass-by reference since it
+            #can be modified. This is a feature, since that is the "clamp" part
+
+            step = 1
+            if ignore_out_of_bounds:
+                return step
+            for dim in range(2): #foreach dim
+                if (r[dim] < 0 and local[dim] == -1) or \
+                        (r[dim] > 0 and local[dim] == 1):
+                    #ensure descent direction does not point outside domain
+                    #this allows constrained minimization
+                    r[dim] = 0
+                elif r[dim] != 0:
+                    # prevent out-of-bounds step by setting maximum step;
+                    if r[dim] > 0:
+                        step = min(step,(1-local[dim])/r[dim])
+                    else:
+                        step = min(step,(-1-local[dim])/r[dim])
+            return step
+
+        while F > tol:
+            #find descent direction by Newton
+
+            #derivative of l2g
+            dx_l2g = np.einsum("dkl,k,l->d",x_poly[:,1:,:],
+                    np.arange(1,Np1)*local[0]**(np.arange(Np1-1)),
+                    local[1]**np.arange(Np1))
+            dy_l2g = np.einsum("dkl,k,l->d",x_poly[:,:,1:],
+                    local[0]**np.arange(Np1),
+                    np.arange(1,Np1)*local[1]**(np.arange(Np1-1)))
+            
+            #check badness
+            defgrad_badness = np.abs(np.linalg.det([dx_l2g,dy_l2g])
+                    /(np.linalg.norm(dx_l2g) * np.linalg.norm(dy_l2g)))
+            if defgrad_badness < def_grad_badness_tol:
+                raise DeformationGradient2DBadnessException(
+                    defgrad_badness,local[0],local[1])
+            
+            #grad of err function (ex^2 + ey^2)/2
+            dxF = np.dot(e,dx_l2g)
+            dyF = np.dot(e,dy_l2g)
+
+            #solve hessian and descent dir
+            hxx = np.sum(dx_l2g*dx_l2g+e*np.einsum("dkl,k,l->d",
+                                                   x_poly[:,2:,:],
+                    np.arange(1,Np1-1)*np.arange(2,Np1)*
+                    local[0]**(np.arange(Np1-2)),
+                    local[1]**(np.arange(Np1))))
+            hxy = np.sum(dx_l2g*dy_l2g+e*np.einsum("dkl,k,l->d",
+                                                   x_poly[:,1:,1:],
+                    np.arange(1,Np1)*local[0]**(np.arange(Np1-1)),
+                    np.arange(1,Np1)*local[1]**(np.arange(Np1-1))))
+            hyy = np.sum(dy_l2g*dy_l2g+e*np.einsum("dkl,k,l->d",
+                                                   x_poly[:,:,2:],
+                    local[0]**(np.arange(Np1)),
+                    np.arange(1,Np1-1)*np.arange(2,Np1)*
+                    local[1]**(np.arange(Np1-2))))
+
+            #target newton_rhaphson step
+            r_nr = -np.linalg.solve([[hxx,hxy],[hxy,hyy]],[dxF,dyF])
+            
+            #target grad desc step
+            r_gd = -np.array((dxF,dyF))
+            r_gd /= np.linalg.norm(r_gd) #scale gd step
+
+
+            #take the better step between Newton-Raphson and grad desc
+            s_nr = clamp_and_maxstep(r_nr)
+            s_gd = clamp_and_maxstep(r_gd)
+            
+            #descent direction -- if dF . r == 0, we found minimum
+            drF = dxF * r_gd[0] + dyF * r_gd[1]
+            if drF > -dmin:
+                break
+            F_gd,s_gd = linsearch(r_gd,s_gd)
+
+            #compare to NR
+            F_nr = 0.5*np.sum((l2g(local + r_nr*s_nr) - target)**2)
+            if F_nr < F_gd:
+                local += r_nr*s_nr
+                e[:] = l2g(local) - target
+                F = F_nr
+            else:
+                local += r_gd*s_gd
+                e[:] = l2g(local) - target
+                F = F_gd
+
+            #nudge back in bounds in case of truncation error
+            if not ignore_out_of_bounds:
+                for dim in range(2):
+                    local[dim] = min(1,max(-1,local[dim]))
+        return (local, F < tol)
 
     def _lagrange_deriv(self, lag_index, deriv_order, knot_index):
         """Calculates the derivative
@@ -98,6 +266,8 @@ class SpectralElement2D(element.Element):
                             j[np.newaxis,np.newaxis])     # (*,*,indims)
             )
         return grad
+    
+
     
     def _def_grad(self,pos_matrix,i,j):
         """Calculates the deformation gradient matrix dX/(dxi)
