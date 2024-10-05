@@ -84,8 +84,99 @@ def ref_coords(request):
 def ref_coords_arr(request):
   return request.param
 
+@pytest.fixture(params=[
+  ((5,),(5,)),
+  ((2,6),(2,6)),
+  ((2,4,3),(2,4,3)),
+  ((3,),(4,3)),
+  ((4,3),(3,)),
+  ((1,3),(4,3)),
+  ((4,3),(1,3)),
+  ((4,1,2),(2,1)),
+  ((2,1),(4,1,2)),
+])
+def broadcastable_shapes(request):
+  return request.param[0],request.param[1],np.broadcast_shapes(*request.param)
+
 
 #===================
+
+def test_lagrange_poly_coefs1D(element):
+  elem = element[0]
+  elem._lagrange_derivs = dict()
+  elem._lagrange_derivs[0] = elem._lagrange_polys
+
+  sigfigs = 5
+  #we will use central finite difference which has O(h^2) error
+  h = 10**-((sigfigs+3)//2)
+
+  for deriv_order in range(0,elem.degree+1):
+    #verify that the lagrange derivatives are being set in the dictionary.
+    P = elem.lagrange_poly1D(deriv_order)
+    np.testing.assert_almost_equal(elem._lagrange_derivs[deriv_order],P,
+        err_msg=f"derivative L^{({deriv_order})} is not being set properly in the dictionary!")
+    assert set(elem._lagrange_derivs) == set(np.arange(deriv_order+1)),\
+        f"Expected dictionary keys not found! Are they being improperly stored?"
+  
+  for deriv_order in range(1,elem.degree+1):
+    num_terms = elem.degree+1-deriv_order
+    #polynomials of degree p are uniquely defined by their values at p+1 unique points. This is how we check equality.
+    test_x = np.linspace(-1,1,num_terms)
+
+    #L_i^(deriv_order), compare to L_i^(...-1) with finite difference
+    # polys are stored as P[i,k] : component c in term cx^k of poly P_i
+    #L_i^(deriv_order-1)
+    L = lambda x: np.einsum("ia,...a",elem.lagrange_poly1D(deriv_order-1),np.expand_dims(x,-1) ** np.arange(num_terms+1))
+    #L_i^(deriv_order)
+    Lp = lambda x: np.einsum("ia,...a",elem.lagrange_poly1D(deriv_order),np.expand_dims(x,-1) ** np.arange(num_terms))
+    np.testing.assert_almost_equal(Lp(test_x),(L(test_x + h) - L(test_x - h))/(2*h),decimal=sigfigs,
+        err_msg=f"derivative L^({deriv_order}) does not match the central difference on L^({deriv_order-1})!")
+    
+
+
+def test_lagrange_evals1D(element,broadcastable_shapes):
+  elem = element[0]
+
+  for deriv_order in range(0,elem.degree+1):
+    #verify that the lagrange derivatives are evaluated correctly
+    P = elem.lagrange_poly1D(deriv_order)
+    test_points = np.linspace(-1,1,np.prod(broadcastable_shapes[1])).reshape(broadcastable_shapes[1])
+    test_indices = np.arange(np.prod(broadcastable_shapes[0])).reshape(broadcastable_shapes[0]) % P.shape[0]
+
+    eval_pts = elem.lagrange_eval1D(deriv_order,test_indices,test_points)
+    assert eval_pts.shape == broadcastable_shapes[2], "Did not broadcast into the right shape!"
+
+    test_points  = np.broadcast_to(test_points, broadcastable_shapes[2])
+    test_indices = np.broadcast_to(test_indices,broadcastable_shapes[2])
+    
+    it = np.nditer(eval_pts,flags=["multi_index"])
+    degp1 = elem.degree+1 - deriv_order #degree+1 of P
+    for Px in it:
+      ind = test_indices[it.multi_index]
+      x = test_points[it.multi_index]
+      np.testing.assert_almost_equal(Px,np.dot(
+          P[ind,:],x**np.arange(degp1)),
+          err_msg=f"index {it.multi_index}: L_{ind}^({deriv_order}) ({x}) disagreement")
+
+
+#test depends on reference_to_real
+def test_def_grad_eval(transformed_element,ref_coords_arr):
+  elem = transformed_element[0]; points = transformed_element[1]; transformation = transformed_element[2]
+  X,Y = np.split(ref_coords_arr,2,axis=-1)
+  X = X.squeeze(-1)
+  Y = Y.squeeze(-1)
+  
+  grads = elem.def_grad(points,X,Y)
+
+  sigfigs = 5
+  #we will use central finite difference which has O(h^2) error
+  h = 10**-((sigfigs+3)//2)
+
+  x_derivs = (elem.reference_to_real(points, X+h, Y) - elem.reference_to_real(points, X-h, Y))/(2*h)
+  y_derivs = (elem.reference_to_real(points, X, Y+h) - elem.reference_to_real(points, X, Y-h))/(2*h)
+
+  np.testing.assert_almost_equal(grads,np.stack((x_derivs,y_derivs),-1),decimal=sigfigs)
+
 
 #@pytest.mark.skip
 def test_reference_to_real(transformed_element,ref_coords_arr):
@@ -108,3 +199,6 @@ def test_real_to_reference_interior(transformed_element,ref_coords):
   recover_ref = elem.locate_point(points,true_pos[0],true_pos[1],tol=1e-10,ignore_out_of_bounds = False)
   assert recover_ref[1], "Test without ignore_out_of_bounds flag. Should be True for point being found (loss(recover_ref) < tol)."
   np.testing.assert_almost_equal(recover_ref[0],ref_coords,err_msg="Test without ignore_out_of_bounds flag")
+
+if __name__ == "__main__":
+  test_lagrange_evals1D((spectral_element.SpectralElement2D(5),np.array(())),((2,1),(4,1,2),(4,2,2)))

@@ -1,7 +1,10 @@
 import numpy as np
 import fastfem.elements._poly_util as GLL_UTIL
 import fastfem.elements.element as element
-import scipy as sp
+import itertools
+
+
+
 
 
 class DeformationGradient2DBadnessException(Exception):
@@ -19,31 +22,72 @@ class SpectralElement2D(element.Element):
     """
     def __init__(self,degree: int):
         super().__init__()
-        self.degree = degree
+        self.degree = degree #poly degree (#nodes - 1)
+        self.num_nodes = degree + 1
+
+        #quadrature values: int_{-1}^1 f dx ~ sum(f(knots) * weights)
         self.knots = GLL_UTIL.get_GLL_knots(degree)
         self.weights = GLL_UTIL.get_GLL_weights(degree)
-        self.lagrange_polys = np.array(GLL_UTIL.build_GLL_polys(degree))
 
-    
+        #lagrange interpolation polynomials L_i(x) = sum_k ( L[i,k] * x^k )
+        self._lagrange_polys = np.array(GLL_UTIL.build_GLL_polys(degree))
+        #store derivatives of L_i as needed, so they need only be computed once
+        self._lagrange_derivs = dict()
+        self._lagrange_derivs[0] = self._lagrange_polys
+
+    def lagrange_poly1D(self,deriv_order:int = 0):
+        """
+        Returns the polynomial coefficients P[i,k], where
+        (d/dx)^{deriv_order} L_{i}(x) = sum_k(P[i,k] * x^k).
+        
+        deriv_order (default 0) is expected to be an integer between 0
+        (inclusive) and degree+1 (exclusive), but this check is not done.
+        """
+        if deriv_order in self._lagrange_derivs:
+            return self._lagrange_derivs[deriv_order]
+
+        #inefficient partial partition calc, but only done once, so...
+        coefs = self._lagrange_polys
+        for i in range(deriv_order):
+            coefs = coefs[:,1:] * np.arange(1,coefs.shape[1])
+        
+        self._lagrange_derivs[deriv_order] = coefs
+        return coefs
+
+    def interp_field(self,field,X,Y):
+        """Evaluates field at (X,Y) in reference coordinates.
+        The result is an array of shape (*pointshape,*fieldshape),
+        where field is of shape (self.degree+1,self.degree+1,*fieldshape)
+        X and Y must have compatible shape, broadcasting to pointshape.
+        
+        
+        field is an array of shape (degree+1,degree+1,*fieldshape) where
+        field[i,j] = F(x[i],x[j]) where x is the vector of knots.
+        """
+        if not isinstance(X,np.ndarray):
+            X = np.array(X)
+        if not isinstance(Y,np.ndarray):
+            Y = np.array(Y)
+        field_pad = tuple(1 for _ in range(len(field.shape) - 2))
+
+        X = X.reshape((*X.shape,*field_pad))
+        Y = Y.reshape((*Y.shape,*field_pad))
+        # F^{i,j} L_{i,j}(X,Y)
+        #lagrange_polys[i,k] : component c in term cx^k of poly i
+        return np.einsum("ij...,ia,...a,jb,...b->...",field,
+            self._lagrange_polys,np.expand_dims(X,-1) ** np.arange(self.num_nodes),
+            self._lagrange_polys,np.expand_dims(Y,-1) ** np.arange(self.num_nodes))
+
     def reference_to_real(self,pos_matrix,X,Y):
         """Maps the points (X,Y) from reference coordinates
         to real positions. The result is an array of shape
-        (*X.shape,2), where the first index is the dimension.
+        (*X.shape,2), where the last index is the dimension.
         X and Y must have compatible shape.
         
         pos_matrix is an array of shape (degree+1,degree+1,2) where
         pos_matrix[i,j] = [x,y] when (x,y) is the position of node i (along
         the x-axis) and j (along the y-axis)"""
-        if not isinstance(X,np.ndarray):
-            X = np.array(X)
-        if not isinstance(Y,np.ndarray):
-            Y = np.array(Y)
-        Np1 = self.degree + 1
-        # x^{i,j} L_{i,j}(X,Y)
-        #lagrange_polys[i,k] : component c in term cx^k of poly i
-        return np.einsum("ijk,ia,...a,jb,...b->...k",pos_matrix,
-            self.lagrange_polys,np.expand_dims(X,-1) ** np.arange(Np1),
-            self.lagrange_polys,np.expand_dims(Y,-1) ** np.arange(Np1))
+        return self.interp_field(pos_matrix,X,Y)
 
     def locate_point(self,pos_matrix, posx,posy, tol=1e-8, dmin = 1e-7,
                      def_grad_badness_tol = 1e-4, ignore_out_of_bounds = False):
@@ -76,7 +120,7 @@ class SpectralElement2D(element.Element):
         This is to ensure that the elements are regularly shaped enough.
         """
         
-        Np1 = self.degree + 1
+        Np1 = self.num_nodes
         target = np.array((posx,posy))
         node_errs = np.sum((pos_matrix-target)**2,axis=-1)
         mindex = np.unravel_index(np.argmin(node_errs),(Np1,Np1))
@@ -87,7 +131,7 @@ class SpectralElement2D(element.Element):
         # position poly
         # sum(x^{i,j} L_{i,j}) -> [dim,k,l] (coefficient of cx^ky^l for dim)
         x_poly = np.einsum("ijd,ik,jl->dkl",pos_matrix,
-                           self.lagrange_polys,self.lagrange_polys)
+                           self._lagrange_polys,self._lagrange_polys)
         
         #local to global
         def l2g(local):
@@ -203,37 +247,78 @@ class SpectralElement2D(element.Element):
                     local[dim] = min(1,max(-1,local[dim]))
         return (local, F < tol)
 
-    def _lagrange_deriv(self, lag_index, deriv_order, knot_index):
+    def lagrange_eval1D(self, deriv_order:int, lag_index, x):
         """Calculates the derivative
-        [(d/dx)^{deriv_order} L_{lag_index}(x)]_{x=x_{knot_index}}
+        [(d/dx)^{deriv_order} L_{lag_index}(x)]_{x}
 
         Note that "lagrange" refers to the lagrange interpolation polynomial,
         not lagrangian coordinates. This is a one-dimension helper function.
+
+        deriv_order is taken as an integer.
+
+        lag_index and x must be broadcastable to the same shape, following
+        standard numpy broadcasting rules, as specified in
+        https://numpy.org/devdocs/user/basics.broadcasting.html.
+
+        Since the polynomial coefficient matrix is indexed by lag_index,
+        that is, P[lag_index,:] is stored, it is advised that lag_index should
+        not have more than one element per index. In other words, lag_index
+        should be some subset, reshaping, and/or permutation of arange().
         """
-        if not isinstance(lag_index,np.ndarray):
-            lag_index = np.array(lag_index)
-        if not isinstance(deriv_order,np.ndarray):
-            deriv_order = np.array(deriv_order)
-        if not isinstance(knot_index,np.ndarray):
-            knot_index = np.array(knot_index)
-        #dims of input arrays
-        indims = max(lag_index.ndim,deriv_order.ndim,knot_index.ndim)
-        lag_index = lag_index.reshape((1,*lag_index.shape,
-                    *[1 for _ in range(indims-lag_index.ndim)]))
-        deriv_order = deriv_order.reshape((1,*deriv_order.shape,
-                    *[1 for _ in range(indims-deriv_order.ndim)]))
-        knot_index = knot_index.reshape((1,*knot_index.shape,
-                    *[1 for _ in range(indims-knot_index.ndim)]))
+
+        #out = sum_{k=deriv_order}^{degree}(
+        #   k*(k-1)*...*(k-deriv_order+1) * L_poly[lag_index,k] * x^{k-deriv_order}
+        #   )
         
-        N = self.degree
-        shape = (N+1,*[1 for _ in range(indims)])
-        arangeshape = np.arange(N+1).reshape(shape)
-        L = self.lagrange_polys[lag_index,arangeshape]
-        filter = arangeshape >= deriv_order
-        return np.sum(L * sp.special.perm(arangeshape,deriv_order)
-            * self.knots[knot_index]
-            **(filter * (arangeshape-deriv_order))\
-            * (filter),axis=0)
+        
+        return np.einsum("...k,...k->...",
+            self.lagrange_poly1D(deriv_order)[lag_index,:],
+            np.expand_dims(x,-1) ** np.arange(self.num_nodes-deriv_order))
+
+    def field_grad(self,field,X,Y, pos_matrix = None):
+        """Calculates the gradient of a field f as the reference coordinates
+        (X,Y).
+        The result is an array of shape (*pointshape,*fieldshape,2),
+        where field is of shape (self.degree+1,self.degree+1,*fieldshape)
+        X and Y must have compatible shape, broadcasting to pointshape.
+        The last index is the coordinate of the derivative.
+        
+        This gradient can be computed in either reference space (with respect
+        to the coordinates of the reference element), or in global space.
+        If a global cartesian gradient should be calculated, then pos_matrix
+        must be set to the coordinate matrix of the element. Otherwise,
+        pos_matrix can be kept None.
+        """
+        if not isinstance(X,np.ndarray):
+            X = np.array(X)
+        if not isinstance(Y,np.ndarray):
+            Y = np.array(Y)
+        field_pad = tuple(1 for _ in range(len(field.shape) - 2))
+
+        X = X.reshape((*X.shape,*field_pad))
+        Y = Y.reshape((*Y.shape,*field_pad))
+
+        x_deriv = np.einsum("ij...,ia,...a,jb,...b->...",field,
+            self.lagrange_poly1D(1),np.expand_dims(X,-1) ** np.arange(self.num_nodes-1),
+            self.lagrange_poly1D(0),np.expand_dims(Y,-1) ** np.arange(self.num_nodes))
+        y_deriv = np.einsum("ij...,ia,...a,jb,...b->...",field,
+            self.lagrange_poly1D(0),np.expand_dims(X,-1) ** np.arange(self.num_nodes),
+            self.lagrange_poly1D(1),np.expand_dims(Y,-1) ** np.arange(self.num_nodes-1))
+        grad = np.stack([x_deriv,y_deriv],-1)
+
+        if pos_matrix is not None:
+            #(*pointshape,*fieldshape,i,j): dX^i/dx_j
+            def_grad = self.def_grad(pos_matrix,X,Y)
+
+
+            #grad is (*pointshape,*fieldshape,j): dF/dx_j
+            # so we need the inverse
+            return np.einsum("...ji,...j->...i",np.linalg.inv(def_grad),grad)
+
+
+        return  grad
+
+        
 
     def def_grad(self,pos_matrix,X,Y):
         """Calculates the deformation gradient matrix dX/(dxi)
@@ -247,25 +332,7 @@ class SpectralElement2D(element.Element):
         pos_matrix[i,j] = [x,y] when (x,y) is the position of node i (along
         the x-axis) and j (along the y-axis)
         """
-        raise NotImplementedError("Not yet (is it needed?)")
-        if not isinstance(i,np.ndarray):
-            i = np.array(i)
-        if not isinstance(j,np.ndarray):
-            j = np.array(j)
-        indims = max(i.ndim,j.ndim)
-        i = np.expand_dims(i,tuple(range(i.ndim,indims)))
-        j = np.expand_dims(j,tuple(range(j.ndim,indims)))
-        
-        grad = np.einsum( "abl,a...,b...->l...",
-            self.fields["positions"],
-            self.lagrange_deriv(np.arange(self.degree+1), # a
-                            np.array([1,0])[np.newaxis,:],# (*,k)
-                            i[np.newaxis,np.newaxis]),    # (*,*,indims)
-            self.lagrange_deriv(np.arange(self.degree+1), # b
-                            np.array([0,1])[np.newaxis,:],# (*,k)
-                            j[np.newaxis,np.newaxis])     # (*,*,indims)
-            )
-        return grad
+        return self.field_grad(pos_matrix,X,Y)
     
 
     
@@ -277,6 +344,7 @@ class SpectralElement2D(element.Element):
         the first new index specifies the coordinate in global space and the
         second index specifies the coordinate in reference space.
         """
+        raise NotImplementedError("Can delegate to def_grad using knot slicing. Do we need this?")
         if not isinstance(i,np.ndarray):
             i = np.array(i)
         if not isinstance(j,np.ndarray):
@@ -306,6 +374,7 @@ class SpectralElement2D(element.Element):
         cartesian==True specifies that this gradient is partial_{x}.
         Otherwise, it is in Lagrangian coordinates, so partial_{xi}.
         """
+        raise NotImplementedError("Can delegate to field_grad using knot slicing. Do we need this?")
         if not isinstance(a,np.ndarray):
             a = np.array(a)
         if not isinstance(b,np.ndarray):
