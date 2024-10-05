@@ -59,7 +59,7 @@ readme = "README.md"
 requires-python = '>=3.12'
 # The package depends on the packages below. They will be installed automatically when
 # the package is installed by users.
-dependencies = ["jax==0.4.33", "matplotlib==3.9.2"]
+dependencies = ["jax==0.4.33", "matplotlib==3.9.2", "gmsh==4.13.1"]
 classifiers = [
     "Intended Audience :: Science/Research",
     "Intended Audience :: Education",
@@ -134,10 +134,7 @@ serve = "mkdocs serve" # hatch run docs:serve
 [tool.hatch.envs.tests]
 # Dependencies to be installed in the `tests` virtual environment.
 dependencies = [
-    "pytest==8.3.2",        # to run the tests
-    "coverage==7.6.1",      # to generate coverage reports
-    "time-machine==2.15.0", # to select an arbitrary date and time for testing
-    "pypdf==4.3.1",         # to read PDF files
+    "pytest==8.3.2", # to run the tests
 ]
 path = ".venv-tests"
 

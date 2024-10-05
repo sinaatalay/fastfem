@@ -5,18 +5,19 @@ import numpy as np
 ElementType = Literal["triangle", "quadrangle"]
 
 
-class Database:
+class _Database:
     """Singleton class to store all the entities created in the gmsh model."""
 
     _instance = None
     points_coordinates: np.ndarray = np.empty((0, 3))
     points: list["Point"] = []
-    line_coordinates: np.ndarray = np.empty((0, 2, 3))
+
+    line_point_tags: np.ndarray = np.empty((0, 2), dtype=np.int64)
     lines: list["Line"] = []
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(Database, cls).__new__(cls)
+            cls._instance = super(_Database, cls).__new__(cls)
         return cls._instance
 
     @classmethod
@@ -36,20 +37,28 @@ class Database:
     @classmethod
     def add_line(cls, line: "Line") -> Optional["Line"]:
         comparison_with_database = np.isclose(
-            cls.line_coordinates, [point.coordinates for point in line.points]
+            cls.line_point_tags, [line.points[0].tag, line.points[1].tag]
         ).all(axis=1)
         where_true = np.where(comparison_with_database)[0]
         if where_true.size:
             where_true = int(where_true[0])
             return cls.lines[where_true]
 
-        cls.line_coordinates = np.vstack(
+        cls.line_point_tags = np.vstack(
             [
-                cls.line_coordinates,
-                np.array([[point.coordinates for point in line.points]]),
+                cls.line_point_tags,
+                [line.points[0].tag, line.points[1].tag],
             ]
         )
         cls.lines.append(line)
+
+    @classmethod
+    def clear(cls):
+        cls.points_coordinates = np.empty((0, 3))
+        cls.points = []
+
+        cls.line_point_tags = np.empty((0, 2), dtype=np.int64)
+        cls.lines = []
 
 
 class Point:
@@ -57,7 +66,7 @@ class Point:
         gmsh.initialize()
         self.coordinates = (x, y, z)
 
-        point = Database().add_point(self)
+        point = _Database().add_point(self)
         if point:
             # This point already exists in the database, send the old point instead of
             # creating a new one
@@ -72,21 +81,24 @@ class Line:
     def __init__(self, p1: Point, p2: Point, number_of_nodes: Optional[int] = None):
         self.points = (p1, p2)
 
-        line = Database().add_line(self)
+        line = _Database().add_line(self)
         if line:
             # This line already exists in the database, send the old line instead of
             # creating a new one
+            self.tag = line.tag
             self.number_of_nodes = line.number_of_nodes
             self.transfinite = line.transfinite
-            self.tag = line.tag
+        else:
+            self.tag: int = gmsh.model.occ.addLine(
+                self.points[0].tag, self.points[1].tag
+            )
 
-        self.tag: int = gmsh.model.occ.addLine(self.points[0].tag, self.points[1].tag)
-
-        if number_of_nodes:
+            self.transfinite = False
             self.number_of_nodes = number_of_nodes
-            self.transfinite = True
-            gmsh.model.occ.synchronize()
-            gmsh.model.mesh.setTransfiniteCurve(self.tag, self.number_of_nodes)
+            if self.number_of_nodes:
+                self.transfinite = True
+                gmsh.model.occ.synchronize()
+                gmsh.model.mesh.setTransfiniteCurve(self.tag, self.number_of_nodes)
 
     def __neg__(self):
         self.points = (self.points[1], self.points[0])
@@ -104,7 +116,7 @@ class Surface:
     ):
         # Make sure all the lines are transfinite if the surface is transfinite
         self.transfinite = transfinite
-        if transfinite:
+        if self.transfinite:
             they_are_all_transfinite = all([line.transfinite for line in lines])
             if not they_are_all_transfinite:
                 raise ValueError(
@@ -145,7 +157,7 @@ class Surface:
 
         gmsh.model.occ.synchronize()
 
-        if transfinite:
+        if self.transfinite:
             gmsh.model.mesh.setTransfiniteSurface(self.tag)
 
         self.element_type = element_type
@@ -167,6 +179,7 @@ class Rectangle:
         ny: Optional[int] = None,
         element_type: ElementType = "quadrangle",
     ):
+        self.transfinite = False
         if all([nx, ny]):
             self.transfinite = True
             self.nx = nx
