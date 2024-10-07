@@ -98,6 +98,32 @@ def ref_coords_arr(request):
 def broadcastable_shapes(request):
   return request.param[0],request.param[1],np.broadcast_shapes(*request.param)
 
+@pytest.fixture
+def broadcastable_shape_triples(broadcastable_shapes):
+  a,b,target = broadcastable_shapes
+
+  num_entries = 3 #for triples
+
+
+  #what each entry can be (this fixture fails if this is >= 10)
+  candidates = [tuple(),a,b]
+  #the tuple needs at least these
+  requires = [1,2]
+
+  def is_valid(inds):
+    #do checks:
+    if any(r not in inds for r in requires):
+      #we do not have a required entry
+      return False
+
+    #placeholder for more checks
+
+    return True
+  ind_gen = (
+      [int(c) for c in np.base_repr(i,len(candidates))]
+      for i in range(len(candidates)**num_entries)
+  )
+  return target,([candidates[i] for i in inds] for inds in ind_gen if is_valid(inds))
 
 #===================
 
@@ -200,5 +226,35 @@ def test_real_to_reference_interior(transformed_element,ref_coords):
   assert recover_ref[1], "Test without ignore_out_of_bounds flag. Should be True for point being found (loss(recover_ref) < tol)."
   np.testing.assert_almost_equal(recover_ref[0],ref_coords,err_msg="Test without ignore_out_of_bounds flag")
 
+def test_field_grad_shapes(transformed_element):
+  elem, points, transformation = transformed_element
+  X = np.linspace(-1,1,elem.degree*4)[:,np.newaxis]
+  Y = np.linspace(-1,1,elem.degree*4)
+
+  sigfigs = 5
+  #we will use central finite difference which has O(h^2) error
+  h = 10**-((sigfigs+3)//2)
+
+  #this hinges on linearity of field values
+  field = np.zeros((elem.degree+1,elem.degree+1))
+  for i in range(elem.degree+1):
+    for j in range(elem.degree+1):
+      field[i,j] = 1
+      grads = elem.field_grad(field,X,Y)
+      cartgrads = elem.field_grad(field,X,Y,pos_matrix=points)
+      x_derivs = (elem.interp_field(field, X+h, Y) - elem.interp_field(field, X-h, Y))/(2*h)
+      y_derivs = (elem.interp_field(field, X, Y+h) - elem.interp_field(field, X, Y-h))/(2*h)
+      grads_comp = np.stack((x_derivs,y_derivs),-1)
+      np.testing.assert_almost_equal(grads,grads_comp,decimal=sigfigs,
+          err_msg="Local-coordinate gradient disagreement")
+      
+      def_grad = elem.def_grad(points,X,Y)
+      grads_cart_to_lag = np.einsum("...ij,...i->...j",def_grad,cartgrads)
+      np.testing.assert_almost_equal(grads_cart_to_lag,grads,decimal=sigfigs,
+          err_msg="Local->global->local disagrees with local")
+      field[i,j] = 0
+  pass
+
 if __name__ == "__main__":
   test_lagrange_evals1D((spectral_element.SpectralElement2D(5),np.array(())),((2,1),(4,1,2),(4,2,2)))
+
