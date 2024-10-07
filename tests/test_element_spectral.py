@@ -226,35 +226,77 @@ def test_real_to_reference_interior(transformed_element,ref_coords):
   assert recover_ref[1], "Test without ignore_out_of_bounds flag. Should be True for point being found (loss(recover_ref) < tol)."
   np.testing.assert_almost_equal(recover_ref[0],ref_coords,err_msg="Test without ignore_out_of_bounds flag")
 
-def test_field_grad_shapes(transformed_element):
+def test_field_grad(transformed_element):
   elem, points, transformation = transformed_element
-  X = np.linspace(-1,1,elem.degree*4)[:,np.newaxis]
-  Y = np.linspace(-1,1,elem.degree*4)
+  X = np.linspace(-1,1,elem.num_nodes)[:,np.newaxis]
+  Y = np.linspace(-1,1,elem.num_nodes)
 
   sigfigs = 5
   #we will use central finite difference which has O(h^2) error
   h = 10**-((sigfigs+3)//2)
 
   #this hinges on linearity of field values
-  field = np.zeros((elem.degree+1,elem.degree+1))
-  for i in range(elem.degree+1):
-    for j in range(elem.degree+1):
-      field[i,j] = 1
-      grads = elem.field_grad(field,X,Y)
-      cartgrads = elem.field_grad(field,X,Y,pos_matrix=points)
-      x_derivs = (elem.interp_field(field, X+h, Y) - elem.interp_field(field, X-h, Y))/(2*h)
-      y_derivs = (elem.interp_field(field, X, Y+h) - elem.interp_field(field, X, Y-h))/(2*h)
-      grads_comp = np.stack((x_derivs,y_derivs),-1)
-      np.testing.assert_almost_equal(grads,grads_comp,decimal=sigfigs,
-          err_msg="Local-coordinate gradient disagreement")
-      
-      def_grad = elem.def_grad(points,X,Y)
-      grads_cart_to_lag = np.einsum("...ij,...i->...j",def_grad,cartgrads)
-      np.testing.assert_almost_equal(grads_cart_to_lag,grads,decimal=sigfigs,
-          err_msg="Local->global->local disagrees with local")
-      field[i,j] = 0
-  pass
+  field = np.zeros((elem.num_nodes,elem.num_nodes,elem.num_nodes,elem.num_nodes))
+  enumeration = (np.arange(elem.num_nodes**2) % elem.num_nodes,
+                 np.arange(elem.num_nodes**2) //elem.num_nodes)
+  field[enumeration[0],enumeration[1],enumeration[0],enumeration[1]] = 1
+  grads = elem.field_grad(field,X,Y)
+  cartgrads = elem.field_grad(field,X,Y,pos_matrix=points)
+  x_derivs = (elem.interp_field(field, X+h, Y) - elem.interp_field(field, X-h, Y))/(2*h)
+  y_derivs = (elem.interp_field(field, X, Y+h) - elem.interp_field(field, X, Y-h))/(2*h)
+  grads_comp = np.stack((x_derivs,y_derivs),-1)
+  np.testing.assert_almost_equal(grads,grads_comp,decimal=sigfigs,
+      err_msg="Local-coordinate gradient disagreement")
+  
+  def_grad = elem.def_grad(points,X,Y)
+  grads_cart_to_lag = np.einsum("...ij,...i->...j",def_grad,cartgrads)
+  np.testing.assert_almost_equal(grads_cart_to_lag,grads,decimal=sigfigs,
+      err_msg="Local->global->local disagrees with local")
+
+def meshquad(X,Y,F):
+  """
+  In case this is ever needed, this is a function to compute the integral on a 2D mesh.
+  Integrals are estimated by estimating integrals on triangles, which are defined by
+  indices ([i,j] - [i+1,j] - [i,j+1]) ([i+1,j+1] - [i+1,j] - [i,j+1])
+  """
+  def cross_mag(XA,YA,XB,YB):
+    return np.abs(XA*YB - XB*YA)
+  F00 = F[:-1,:-1];F01 = F[:-1,1:];F10 = F[1:,:-1];F11 = F[1:,1:]
+  X00 = X[:-1,:-1];X01 = X[:-1,1:];X10 = X[1:,:-1];X11 = X[1:,1:]
+  Y00 = Y[:-1,:-1];Y01 = Y[:-1,1:];Y10 = Y[1:,:-1];Y11 = Y[1:,1:]
+  axes = np.arange(X.ndim)
+  return np.sum(cross_mag(X10-X00,Y10-Y00,X01-X00,Y01-Y00) * (F00 + F01 + F10)/6,axes) +\
+         np.sum(cross_mag(X10-X11,Y10-Y11,X01-X11,Y01-Y11) * (F11 + F01 + F10)/6,axes)
+
+def test_stiffness_matrix(transformed_element):
+  elem, points, transformation = transformed_element
+  #weights [i,j] times jacobian
+  w = elem.weights[:,np.newaxis] * elem.weights[np.newaxis,:] * \
+      np.abs(np.linalg.det(
+          elem.def_grad(points,np.arange(elem.num_nodes),
+                        np.arange(elem.num_nodes)[np.newaxis,:])
+      ))
+  
+  # F(x_i,x_j) = delta_{im}delta_{jn}
+
+  #equiv: # L_m(x_i)L_n(x_j)
+  field = np.zeros((elem.num_nodes,elem.num_nodes,elem.num_nodes,elem.num_nodes))
+  enumeration = (np.arange(elem.num_nodes**2) % elem.num_nodes,
+                 np.arange(elem.num_nodes**2) //elem.num_nodes)
+  field[enumeration[0],enumeration[1],enumeration[0],enumeration[1]] = 1
+
+  # [i,j, m,n, dim] partial_dim phi_{mn}(xi,xj)
+  field_grad = elem.field_grad(field,elem.knots[:,np.newaxis],elem.knots[np.newaxis,:],pos_matrix=points)
+  
+  # sum_{ij} w_{ij}( partial_dim phi_{mn}(xi,xj) )( partial_dim F_{ab}(xi,xj) )
+  stiff = np.einsum("ij,ijmnd,ijabd->mnab",w,field_grad,field_grad)
+
+  np.testing.assert_almost_equal(elem.basis_stiffness_matrix_times_field(points,field),stiff)
+
+  
+
+  
 
 if __name__ == "__main__":
-  test_lagrange_evals1D((spectral_element.SpectralElement2D(5),np.array(())),((2,1),(4,1,2),(4,2,2)))
+  pass
 

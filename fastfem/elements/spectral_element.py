@@ -419,16 +419,48 @@ class SpectralElement2D(element.Element):
         #weights [i,j] times jacobian
         w = self.weights[:,np.newaxis] * self.weights[np.newaxis,:] * \
             np.abs(np.linalg.det(
-                self.def_grad(pos_matrix,np.arange(self.degree+1),
-                              np.arange(self.degree+1)[np.newaxis,:])
+                self.def_grad(pos_matrix,np.arange(self.num_nodes),
+                              np.arange(self.num_nodes)[np.newaxis,:])
             ))
         return w
     
-    def basis_stiffness_matrix(self, pos_matrix):
+    def basis_stiffness_matrix_times_field(self, pos_matrix, field):
 
         #compute using GLL quadrature
 
-        raise NotImplementedError("TODO")
+        # int (grad phi1 . grad field)
+        w = self.weights[:,np.newaxis] * self.weights[np.newaxis,:] * \
+            np.abs(np.linalg.det(
+                self.def_grad(pos_matrix,np.arange(self.num_nodes),
+                              np.arange(self.num_nodes)[np.newaxis,:])
+            ))
+        # [i,k] L_k'(x_i)
+        lag_div = self.lagrange_eval1D(1,np.arange(self.num_nodes),self.knots[:,np.newaxis])
+        # [i,j,...,dim] partial_dim field(xi,xj)
+
+        grad_field_form = self.field_grad(field,self.knots[:,np.newaxis],self.knots)
+        def_grad_inv = np.linalg.inv(self.def_grad(pos_matrix,self.knots[:,np.newaxis],self.knots))
+        grad_field_vec = np.einsum("ijab,ijdb,ij...d->ij...a",def_grad_inv,def_grad_inv,grad_field_form)
+        grad_field = np.split(grad_field_vec,2,axis=-1)
+
+        # integrand is
+        # [ partial_dim field(xi,xj) ] * [ partial_dim (L_m(xi)L_n(xj)) ]
+        # where partial_dim (L_m(xi)L_n(xj)) = {dim==0: L_m'(xi)L_n(xj), dim==1: L_m(xi)L_n'(xj)}
+        #                  = delta_{dim,0} delta_{nj} L_m'(xi) + delta_{dim,1} delta_{mi} L_n'(xj)
+        
+        # full integral is
+        # [ partial_dim field(xi,xj) ] * [ partial_dim (L_m(xi)L_n(xj)) ] * w_{ij}
+        # = partial_dim field(xi,xj) (delta_{dim,0} delta_{nj} L_m'(xi) + delta_{dim,1} delta_{mi} L_n'(xj)) w_{ij}
+        # = (partial_dim field(xi,xj)) delta_{dim,0} delta_{nj} L_m'(xi)w_{ij}
+        #           + (partial_dim field(xi,xj)) delta_{dim,1} delta_{mi} L_n'(xj) w_{ij}
+        # = (partial_0 field(xi,xn)) L_m'(xi)w_{in} + (partial_1 field(xm,xj)) L_n'(xj) w_{mj}
+
+        KF = np.empty((self.num_nodes,self.num_nodes,*field.shape[2:]))
+        KF[:,:] = np.einsum("in...,im,in->mn...",grad_field[0].squeeze(-1),lag_div,w)
+        KF[:,:]+= np.einsum("mj...,jn,mj->mn...",grad_field[1].squeeze(-1),lag_div,w)
+
+
+        return KF
     
     def _bdry_normalderiv(self,pos_matrix,edge_index,field):
         """Computes the gradient of 'field' in the normal
