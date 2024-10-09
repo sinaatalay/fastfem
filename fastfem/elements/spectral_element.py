@@ -461,6 +461,27 @@ class SpectralElement2D(element.Element):
 
 
         return KF
+    def basis_stiffness_matrix_diagonal(self,pos_matrix):
+        
+        w = self.weights[:,np.newaxis] * self.weights[np.newaxis,:] * \
+            np.abs(np.linalg.det(
+                self.def_grad(pos_matrix,np.arange(self.num_nodes),
+                              np.arange(self.num_nodes)[np.newaxis,:])
+            ))
+            
+        # [i,k] L_k'(x_i)
+        lag_div = self.lagrange_eval1D(1,np.arange(self.num_nodes),self.knots[:,np.newaxis])
+        lag_div2 = lag_div**2
+        
+        
+        def_grad_inv = np.linalg.inv(self.def_grad(pos_matrix,self.knots[:,np.newaxis],self.knots))
+        #to compute, join gradients with a,d and sum along i,j
+        inner_prod = np.einsum("ijab,ijdb,ij->ijad",def_grad_inv,def_grad_inv,w)
+        
+        
+        return np.einsum("im,in->mn",lag_div2,inner_prod[:,:,0,0]) +\
+               np.einsum("jn,mj->mn",lag_div2,inner_prod[:,:,1,1]) +\
+            2* np.einsum("mm,nn,mn->mn",lag_div,lag_div,inner_prod[:,:,0,1])
     
     def _bdry_normalderiv(self,pos_matrix,edge_index,field):
         """Computes the gradient of 'field' in the normal
@@ -490,14 +511,14 @@ class SpectralElement2D(element.Element):
         #90 CCW rot
         comparevec = np.flip(comparevec,axis=1) * np.array((-1,1))[np.newaxis,:]
         
+        raise NotImplementedError("")
 
-
-        return np.einsum("sk,ksab,ab->s",
-            comparevec,
-            self._lagrange_grads(np.arange(self.degree+1)[np.newaxis,:],
-                    np.arange(self.degree+1)[np.newaxis,np.newaxis,:],
-                    edge_inds[:,0],edge_inds[:,1]),
-            field) / inv_scale
+        # return np.einsum("sk,ksab,ab->s",
+        #     comparevec,
+        #     self._lagrange_grads(np.arange(self.degree+1)[np.newaxis,:],
+        #             np.arange(self.degree+1)[np.newaxis,np.newaxis,:],
+        #             edge_inds[:,0],edge_inds[:,1]),
+        #     field) / inv_scale
 
     def _get_edge_inds(self,edgeID):
         """Returns a (N+1) x 2 array of indices for the

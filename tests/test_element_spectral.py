@@ -10,8 +10,8 @@ from fastfem.elements import spectral_element
 def get_ref_posmatrix(order: int):
   knots = _poly_util.get_GLL_knots(order)
   out = np.empty((order+1,order+1,2))
-  out[:,:,0] = elem.knots[:,np.newaxis]
-  out[:,:,1] = elem.knots[np.newaxis,:]
+  out[:,:,0] = knots[:,np.newaxis]
+  out[:,:,1] = knots[np.newaxis,:]
   return out
 
 @pytest.fixture(scope="module", params=[3,4,5])
@@ -292,6 +292,9 @@ def test_stiffness_matrix(transformed_element):
   stiff = np.einsum("ij,ijmnd,ijabd->mnab",w,field_grad,field_grad)
 
   np.testing.assert_almost_equal(elem.basis_stiffness_matrix_times_field(points,field),stiff)
+  
+  np.testing.assert_almost_equal(elem.basis_stiffness_matrix_diagonal(points),
+      np.einsum("mnmn->mn",stiff))
 
   
 
