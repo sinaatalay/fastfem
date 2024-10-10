@@ -61,12 +61,12 @@ def run_demo(f_generator,elem_order:int, nelem_x:int, nelem_y:int,
     #u in global basis with additional throw-away value for boundaries
     U = np.zeros(global_dim+1)
     
-    U_TRUE = np.zeros(global_dim+1)
-    for i in range(nelem_x):
-        for j in range(nelem_y):
-            U_TRUE[global_indices[i,j]] = u_true(coords[i,j,:,:,0],coords[i,j,:,:,1])
-    U_TRUE[-1] = 0
-    U[:] = U_TRUE
+    # U_TRUE = np.zeros(global_dim+1)
+    # for i in range(nelem_x):
+    #     for j in range(nelem_y):
+    #         U_TRUE[global_indices[i,j]] = u_true(coords[i,j,:,:,0],coords[i,j,:,:,1])
+    # U_TRUE[-1] = 0
+    # U[:] = U_TRUE
     
     A = np.zeros((global_dim+1,global_dim+1))
     #we are trying to solve AU = F, where A is a sum of sparse blocks
@@ -88,7 +88,7 @@ def run_demo(f_generator,elem_order:int, nelem_x:int, nelem_y:int,
         STEP = STEP[:-1]/DIAG[:-1]
         #under-relaxation, take substep:
         U[:-1] += 0.67*STEP
-        print(iter,np.linalg.norm(U-U_TRUE,ord=np.inf),np.linalg.norm(STEP,ord=np.inf))
+        # print(iter,np.linalg.norm(U-U_TRUE,ord=np.inf),np.linalg.norm(STEP,ord=np.inf))
         if np.linalg.norm(STEP,ord=np.inf) < 1e-9:
             break
     u = np.empty((nelem_x,nelem_y,elem_order+1,elem_order+1))
@@ -180,6 +180,7 @@ Set to plot using matplotlib.
     return parser
 
 if __name__ == "__main__":
+    raise NotImplementedError("Example code not yet implemented")
     args = build_argparse().parse_args()
     print(f"Demo-ing spectral elements: order {args.order} on a "+
           f"{args.nelemx}x{args.nelemy} grid")
@@ -200,7 +201,3 @@ if __name__ == "__main__":
     coords, u = run_demo(f_generator,args.order,args.nelemx,args.nelemy,max_iters=500)
     u_comp = u_true(coords[...,0],coords[...,1])
     print("infinity norm error",np.max(np.abs(u - u_comp)))
-    import matplotlib.pyplot as plt
-    plt.figure(0)
-    plt.scatter(coords[...,0],coords[...,1],10,u-u_comp)
-    plt.show()
