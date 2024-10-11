@@ -1,7 +1,9 @@
-class Element:
-    """Handles the management of element operations. TODO elaborate
-    TODO consider setting this as an ABC"""
+import abc
 
+class Element(abc.ABC):
+    """Handles the management of element operations. TODO elaborate"""
+
+    @abc.abstractmethod
     def reference_to_real(self,pos_matrix,X,Y):
         """Maps the points (X,Y) from reference coordinates
         to real positions. The result is an array of shape
@@ -21,8 +23,9 @@ class Element:
             Y (ndarray or numeric): Y coordinates of the points to map. The
                     shape of Y must be compatible with the shape of X.
         """
-        raise NotImplementedError("Element base class called.")
+        pass
     
+    @abc.abstractmethod
     def basis_mass_matrix(self,pos_matrix):
         """Recovers the mass matrix entries = ∫ ɸᵢɸⱼ dx² for this element.
 
@@ -30,8 +33,9 @@ class Element:
             pos_matrix (ndarray): an array representing the positions of the
                     element nodes. This is of the shape basis_shape
         """
-        raise NotImplementedError("Element base class called.")
+        pass
     
+    @abc.abstractmethod
     def basis_stiffness_matrix_times_field(self, pos_matrix, field):
         """Computes the vector ∫ ∇ɸᵢ • ∇f dx² of the H¹ products on the element
         over the whole basis on the element. Using the multi-index 'n' for the
@@ -47,6 +51,6 @@ class Element:
             field (ndarray): an array of shape (*basis_shape,*field_shape)
                     representing the field to integrate with.
         """
-        raise NotImplementedError("Element base class called.")
+        pass
 
     #TODO boundary integrals, other field * basis integral configurations

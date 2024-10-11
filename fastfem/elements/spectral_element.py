@@ -503,8 +503,8 @@ class SpectralElement2D(element.Element):
                 np.linalg.det(
                     self.def_grad(
                         pos_matrix,
-                        np.arange(self.num_nodes),
-                        np.arange(self.num_nodes)[np.newaxis, :],
+                        self.knots[:,np.newaxis],
+                        self.knots[np.newaxis,:],
                     )
                 )
             )

@@ -88,7 +88,7 @@ def transformed_element(element, transformation):
     params=[(0, 0), (-1, -1), (1, -1), (1, 1), (-1, 1), (0.5, 0.5), (-0.33, 0.84)]
 )
 def ref_coords(request):
-    return np.array(request.param)
+    return request.param
 
 
 @pytest.fixture(
@@ -102,8 +102,7 @@ def ref_coords_arr(request):
     return request.param
 
 
-@pytest.fixture(
-    params=[
+_broadcastable_pairs = [
         ((5,), (5,)),
         ((2, 6), (2, 6)),
         ((2, 4, 3), (2, 4, 3)),
@@ -114,7 +113,8 @@ def ref_coords_arr(request):
         ((4, 1, 2), (2, 1)),
         ((2, 1), (4, 1, 2)),
     ]
-)
+
+@pytest.fixture(params=_broadcastable_pairs)
 def broadcastable_shapes(request):
     return request.param[0], request.param[1], np.broadcast_shapes(*request.param)
 
@@ -308,8 +308,8 @@ def test_real_to_reference_interior(transformed_element, ref_coords):
 
 def test_field_grad(transformed_element):
     elem, points, transformation = transformed_element
-    X = np.linspace(-1, 1, elem.num_nodes)[:, np.newaxis]
-    Y = np.linspace(-1, 1, elem.num_nodes)
+    X = np.linspace(-1, 1, elem.num_nodes)[:, np.newaxis] + np.zeros((1,elem.num_nodes))
+    Y = np.linspace(-1, 1, elem.num_nodes)[np.newaxis, :] + np.zeros((elem.num_nodes,1))
 
     sigfigs = 5
     # we will use central finite difference which has O(h^2) error
@@ -343,9 +343,35 @@ def test_field_grad(transformed_element):
     np.testing.assert_almost_equal(
         grads_cart_to_lag,
         grads,
-        decimal=sigfigs,
         err_msg="Local->global->local disagrees with local",
     )
+
+    #values are correct, now test shaped accessing: first, single values
+    np.testing.assert_almost_equal(
+        elem.field_grad(field,X[0,0],Y[0,0]),
+        grads[0,0,...],
+        err_msg="Shape-invariance test: Single floats fail",
+    )
+
+    #values are correct, now test shaped accessing: use single values to verify
+    for a,b in _broadcastable_pairs:
+        c = np.broadcast_shapes(a,b)
+        accessor_a = (np.arange(np.prod(a)*2) % elem.num_nodes).reshape((2,) + a)
+        accessor_b = (np.arange(np.prod(b)*2) % elem.num_nodes).reshape((2,) + b)
+        Xa = X[*accessor_a]
+        Yb = Y[*accessor_b]
+        res = elem.field_grad(field,Xa,Yb)
+        Xc = Xa + 0*Yb
+        Yc = Yb + 0*Xa
+        it = np.nditer(Xc,flags=['multi_index'])
+        for x in it:
+            ind = it.multi_index
+            np.testing.assert_almost_equal(res[*ind,...],
+                elem.field_grad(field,x,Yc[ind]),
+                err_msg=f"Shape-invariance test: pair {a}-{b} (broadcast to {c}) fails",
+            )
+
+
 
 def test_degen_elem(element):
     elem,points = element
@@ -388,6 +414,21 @@ def meshquad(X, Y, F):
         cross_mag(X10 - X11, Y10 - Y11, X01 - X11, Y01 - Y11) * (F11 + F01 + F10) / 6,
         axes,
     )
+
+def test_mass_matrix(transformed_element):
+    elem, points, transformation = transformed_element
+    mass = elem.basis_mass_matrix(points)
+
+    knots = elem.knots
+    weights = elem.weights
+
+    assert mass.shape == (elem.num_nodes,elem.num_nodes)
+
+    def_grad = elem.def_grad(points,knots[:,np.newaxis],knots[np.newaxis,:])
+    jac = np.abs(np.linalg.det(def_grad))
+    for i in range(elem.num_nodes):
+        for j in range(elem.num_nodes):
+            assert mass[i,j] == pytest.approx(weights[i] * weights[j] * jac[i,j])
 
 
 def test_stiffness_matrix(transformed_element):
