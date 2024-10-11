@@ -9,6 +9,7 @@ edit_uri: edit/main/docs/
 
 nav:
   - Home: index.md
+  - Theory: theory.md
   - User Guide: user_guide/index.md
   - Developer Guide:
       - Developer Guide: developer_guide/index.md
