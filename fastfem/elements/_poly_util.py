@@ -49,9 +49,7 @@ def _polyprod(p, q, clear_zeros=True):
             p = p[:-1]
         while len(q) > 0 and q[-1] == 0:
             q = q[:-1]
-    lenp = len(p)
-    lenq = len(q)
-    if lenp == 0 or lenq == 0:
+    if len(p) == 0 or len(q) == 0:
         return np.array([0])
     lenres = len(p) + len(q) - 1
     res = np.zeros(lenres)
@@ -61,7 +59,7 @@ def _polyprod(p, q, clear_zeros=True):
         # p_0*q_i + p_1*q_{i-1} + ... + p_i*q_0
         #  = sum(p_j * q_{i-j})
         # start at i-j = min(i,deg(q)), end at j=min(i,deg(p))
-        for j in range(max(0, i - lenq + 1), min(lenp, i + 1)):
+        for j in range(max(0, i - len(q) + 1), min(len(p), i + 1)):
             # print(i,j,res,p,q)
             res[i] += p[j] * q[i - j]
     return res
