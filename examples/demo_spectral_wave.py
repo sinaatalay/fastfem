@@ -48,11 +48,13 @@ def run_demo(
     MASS_MAT = np.zeros(global_dim + 1)
 
     char_wavenum = 10
-    def init_cond_U(x,y):
+
+    def init_cond_U(x, y):
         return np.exp(
             (-0.5 * char_wavenum**2) * ((x - bump_x) ** 2 + (y - bump_y) ** 2)
         )
-    def init_cond_UDOT(x,y):
+
+    def init_cond_UDOT(x, y):
         return np.zeros(np.broadcast_shapes(x.shape, y.shape))
 
     for i in range(nelem_x):

@@ -103,16 +103,17 @@ def ref_coords_arr(request):
 
 
 _broadcastable_pairs = [
-        ((5,), (5,)),
-        ((2, 6), (2, 6)),
-        ((2, 4, 3), (2, 4, 3)),
-        ((3,), (4, 3)),
-        ((4, 3), (3,)),
-        ((1, 3), (4, 3)),
-        ((4, 3), (1, 3)),
-        ((4, 1, 2), (2, 1)),
-        ((2, 1), (4, 1, 2)),
-    ]
+    ((5,), (5,)),
+    ((2, 6), (2, 6)),
+    ((2, 4, 3), (2, 4, 3)),
+    ((3,), (4, 3)),
+    ((4, 3), (3,)),
+    ((1, 3), (4, 3)),
+    ((4, 3), (1, 3)),
+    ((4, 1, 2), (2, 1)),
+    ((2, 1), (4, 1, 2)),
+]
+
 
 @pytest.fixture(params=_broadcastable_pairs)
 def broadcastable_shapes(request):
@@ -180,18 +181,20 @@ def test_lagrange_poly_coefs1D(element):
         # polys are stored as P[i,k] : component c in term cx^k of poly P_i
         # L_i^(deriv_order-1)
         def L(x):
-          return np.einsum(
-            "ia,...a",
-            elem.lagrange_poly1D(deriv_order - 1),
-            np.expand_dims(x, -1) ** np.arange(num_terms + 1),
-          )
+            return np.einsum(
+                "ia,...a",
+                elem.lagrange_poly1D(deriv_order - 1),
+                np.expand_dims(x, -1) ** np.arange(num_terms + 1),
+            )
+
         # L_i^(deriv_order)
         def Lp(x):
-          return np.einsum(
-              "ia,...a",
-              elem.lagrange_poly1D(deriv_order),
-              np.expand_dims(x, -1) ** np.arange(num_terms),
-          )
+            return np.einsum(
+                "ia,...a",
+                elem.lagrange_poly1D(deriv_order),
+                np.expand_dims(x, -1) ** np.arange(num_terms),
+            )
+
         np.testing.assert_almost_equal(
             Lp(test_x),
             (L(test_x + h) - L(test_x - h)) / (2 * h),
@@ -238,7 +241,7 @@ def test_lagrange_evals1D(element, broadcastable_shapes):
 def test_def_grad_eval(transformed_element, ref_coords_arr):
     elem = transformed_element[0]
     points = transformed_element[1]
-    #transformation = transformed_element[2]
+    # transformation = transformed_element[2]
     X, Y = np.split(ref_coords_arr, 2, axis=-1)
     X = X.squeeze(-1)
     Y = Y.squeeze(-1)
@@ -308,8 +311,12 @@ def test_real_to_reference_interior(transformed_element, ref_coords):
 
 def test_field_grad(transformed_element):
     elem, points, transformation = transformed_element
-    X = np.linspace(-1, 1, elem.num_nodes)[:, np.newaxis] + np.zeros((1,elem.num_nodes))
-    Y = np.linspace(-1, 1, elem.num_nodes)[np.newaxis, :] + np.zeros((elem.num_nodes,1))
+    X = np.linspace(-1, 1, elem.num_nodes)[:, np.newaxis] + np.zeros(
+        (1, elem.num_nodes)
+    )
+    Y = np.linspace(-1, 1, elem.num_nodes)[np.newaxis, :] + np.zeros(
+        (elem.num_nodes, 1)
+    )
 
     sigfigs = 5
     # we will use central finite difference which has O(h^2) error
@@ -346,40 +353,40 @@ def test_field_grad(transformed_element):
         err_msg="Local->global->local disagrees with local",
     )
 
-    #values are correct, now test shaped accessing: first, single values
+    # values are correct, now test shaped accessing: first, single values
     np.testing.assert_almost_equal(
-        elem.field_grad(field,X[0,0],Y[0,0]),
-        grads[0,0,...],
+        elem.field_grad(field, X[0, 0], Y[0, 0]),
+        grads[0, 0, ...],
         err_msg="Shape-invariance test: Single floats fail",
     )
 
-    #values are correct, now test shaped accessing: use single values to verify
-    for a,b in _broadcastable_pairs:
-        c = np.broadcast_shapes(a,b)
-        accessor_a = (np.arange(np.prod(a)*2) % elem.num_nodes).reshape((2,) + a)
-        accessor_b = (np.arange(np.prod(b)*2) % elem.num_nodes).reshape((2,) + b)
+    # values are correct, now test shaped accessing: use single values to verify
+    for a, b in _broadcastable_pairs:
+        c = np.broadcast_shapes(a, b)
+        accessor_a = (np.arange(np.prod(a) * 2) % elem.num_nodes).reshape((2,) + a)
+        accessor_b = (np.arange(np.prod(b) * 2) % elem.num_nodes).reshape((2,) + b)
         Xa = X[*accessor_a]
         Yb = Y[*accessor_b]
-        res = elem.field_grad(field,Xa,Yb)
-        Xc = Xa + 0*Yb
-        Yc = Yb + 0*Xa
-        it = np.nditer(Xc,flags=['multi_index'])
+        res = elem.field_grad(field, Xa, Yb)
+        Xc = Xa + 0 * Yb
+        Yc = Yb + 0 * Xa
+        it = np.nditer(Xc, flags=["multi_index"])
         for x in it:
             ind = it.multi_index
-            np.testing.assert_almost_equal(res[*ind,...],
-                elem.field_grad(field,x,Yc[ind]),
+            np.testing.assert_almost_equal(
+                res[*ind, ...],
+                elem.field_grad(field, x, Yc[ind]),
                 err_msg=f"Shape-invariance test: pair {a}-{b} (broadcast to {c}) fails",
             )
 
 
-
 def test_degen_elem(element):
-    elem,points = element
-    points[...,0] = np.abs(points[...,0])
+    elem, points = element
+    points[..., 0] = np.abs(points[..., 0])
     try:
-        elem.locate_point(points,1e-10,0.3)
+        elem.locate_point(points, 1e-10, 0.3)
     except spectral_element.DeformationGradient2DBadnessException as e:
-        assert e.x == pytest.approx(0,abs=1e-5), "error should be on local x=0"
+        assert e.x == pytest.approx(0, abs=1e-5), "error should be on local x=0"
         return
     assert False, "Correct Exception not thrown!"
 
@@ -415,6 +422,7 @@ def meshquad(X, Y, F):
         axes,
     )
 
+
 def test_mass_matrix(transformed_element):
     elem, points, transformation = transformed_element
     mass = elem.basis_mass_matrix(points)
@@ -422,13 +430,13 @@ def test_mass_matrix(transformed_element):
     knots = elem.knots
     weights = elem.weights
 
-    assert mass.shape == (elem.num_nodes,elem.num_nodes)
+    assert mass.shape == (elem.num_nodes, elem.num_nodes)
 
-    def_grad = elem.def_grad(points,knots[:,np.newaxis],knots[np.newaxis,:])
+    def_grad = elem.def_grad(points, knots[:, np.newaxis], knots[np.newaxis, :])
     jac = np.abs(np.linalg.det(def_grad))
     for i in range(elem.num_nodes):
         for j in range(elem.num_nodes):
-            assert mass[i,j] == pytest.approx(weights[i] * weights[j] * jac[i,j])
+            assert mass[i, j] == pytest.approx(weights[i] * weights[j] * jac[i, j])
 
 
 def test_stiffness_matrix(transformed_element):
@@ -474,8 +482,9 @@ def test_stiffness_matrix(transformed_element):
         elem.basis_stiffness_matrix_diagonal(points), np.einsum("mnmn->mn", stiff)
     )
 
-@pytest.mark.parametrize("boundary_id", [0,1,2,3])
-def test_bdry_integ(transformed_element,boundary_id):
+
+@pytest.mark.parametrize("boundary_id", [0, 1, 2, 3])
+def test_bdry_integ(transformed_element, boundary_id):
     elem, points, transformation = transformed_element
 
     field = np.zeros((elem.num_nodes, elem.num_nodes, elem.num_nodes, elem.num_nodes))
@@ -485,7 +494,7 @@ def test_bdry_integ(transformed_element,boundary_id):
     )
     field[enumeration[0], enumeration[1], enumeration[0], enumeration[1]] = 1
     with pytest.raises(NotImplementedError):
-        elem._bdry_normalderiv(points,boundary_id,field)
+        elem._bdry_normalderiv(points, boundary_id, field)
 
 
 if __name__ == "__main__":

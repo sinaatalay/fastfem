@@ -104,8 +104,8 @@ class SpectralElement2D(element.Element):
         dmin=1e-7,
         def_grad_badness_tol=1e-4,
         ignore_out_of_bounds=False,
-        char_x = None,
-        char_y = None
+        char_x=None,
+        char_y=None,
     ):
         """Attempts to find the local coordinates corresponding to the
         given global coordinates (posx,posy). Returns (local_pt,success).
@@ -141,17 +141,25 @@ class SpectralElement2D(element.Element):
         Np1 = self.num_nodes
 
         if char_x is None:
-            #along each x-line, add the distances between nodes
-            char_x = np.min(np.sum( #take min across y-values, of x-line sums
-                np.linalg.norm(pos_matrix[1:,:,:]-pos_matrix[:-1,:,:],axis=-1),
-                axis=0
-            ))
-            
+            # along each x-line, add the distances between nodes
+            char_x = np.min(
+                np.sum(  # take min across y-values, of x-line sums
+                    np.linalg.norm(
+                        pos_matrix[1:, :, :] - pos_matrix[:-1, :, :], axis=-1
+                    ),
+                    axis=0,
+                )
+            )
+
         if char_y is None:
-            char_y = np.min(np.sum( #take min across x-values, of y-line sums
-                np.linalg.norm(pos_matrix[:,1:,:]-pos_matrix[:,:-1,:],axis=-1),
-                axis=1
-            ))
+            char_y = np.min(
+                np.sum(  # take min across x-values, of y-line sums
+                    np.linalg.norm(
+                        pos_matrix[:, 1:, :] - pos_matrix[:, :-1, :], axis=-1
+                    ),
+                    axis=1,
+                )
+            )
 
         target = np.array((posx, posy))
         node_errs = np.sum((pos_matrix - target) ** 2, axis=-1)
@@ -503,8 +511,8 @@ class SpectralElement2D(element.Element):
                 np.linalg.det(
                     self.def_grad(
                         pos_matrix,
-                        self.knots[:,np.newaxis],
-                        self.knots[np.newaxis,:],
+                        self.knots[:, np.newaxis],
+                        self.knots[np.newaxis, :],
                     )
                 )
             )
@@ -611,7 +619,7 @@ class SpectralElement2D(element.Element):
         # (partial_1 phi_a)(x = x_N) * phi_b(y = x_j) ; [a,b,j] expected,
         # but this is just [a] * delta_{b,j}, so we only need [a]:
         edge_inds = self._get_edge_inds(edge_index)
-        pos_bdry = pos_matrix[edge_inds[:, 0], edge_inds[:, 1],:]
+        pos_bdry = pos_matrix[edge_inds[:, 0], edge_inds[:, 1], :]
         def_grad = self.def_grad(pos_matrix, pos_bdry[:, 0], pos_bdry[:, 1])
         inv_scale = np.linalg.norm(
             def_grad[:, :, (edge_index + 1) % 2], axis=-1
