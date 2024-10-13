@@ -63,7 +63,7 @@ jobs:
         uses: pypa/hatch@install
 
       - name: Test
-        run: hatch run tests:coverage run -m pytest
+        run: hatch run coverage run -m pytest
 
       - name: Rename the coverage file
         run: mv .coverage .coverage.${{ matrix.python-version }}.${{ matrix.os }}
@@ -100,9 +100,9 @@ jobs:
 
       - name: Combine coverage files
         run: |
-          hatch run tests:coverage combine coverage
-          hatch run tests:coverage report
-          hatch run tests:coverage html --show-contexts --title "FastFEM coverage for ${{ github.sha }}"
+          hatch run coverage combine coverage
+          hatch run coverage report
+          hatch run coverage html --show-contexts --title "FastFEM coverage for ${{ github.sha }}"
 
       - name: Upload the coverage report to smokeshow
         run: |
