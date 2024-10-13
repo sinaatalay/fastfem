@@ -64,6 +64,7 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "Intended Audience :: Education",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ] # Go to https://pypi.org/classifiers/ to see all classifiers
@@ -96,12 +97,13 @@ Changelog = 'https://sinatay.github.io/fastfem/changelog'
 [tool.hatch.envs.default]
 # Dependencies to be installed in the `default` virtual environment.
 dependencies = [
-    "ruff",          # to lint the code
-    "black",         # to format the code
-    "ipython",       # for ipython shell
-    "isort",         # to sort the imports  
-    "pyright",       # to check the types
-    "pytest==8.3.2", # to run the tests
+    "ruff",     # to lint the code
+    "black",    # to format the code
+    "ipython",  # for ipython shell
+    "isort",    # to sort the imports  
+    "pyright",  # to check the types
+    "pytest",   # to run the tests
+    "coverage", # to measure the test coverage
 ]
 path = ".venv"
 [tool.hatch.envs.default.scripts]
