@@ -52,6 +52,10 @@ jobs:
 
     runs-on: ${{ matrix.os }}-latest
     steps:
+      - if: matrix.os == 'ubuntu'
+        name: Install libglu1-mesa for Gmsh
+        run: sudo apt install libglu1-mesa
+
       - uses: actions/checkout@v4
 
       - name: Set up Python ${{ matrix.python-version }}
