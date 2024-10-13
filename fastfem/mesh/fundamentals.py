@@ -1,7 +1,7 @@
 import dataclasses
 from typing import Optional
 
-from .generator import TwoDElementType, Line, Point, Surface, Geometry
+from .generator import Geometry, Line, Point, Surface, TwoDElementType
 
 __all__ = ["Rectangle", "Square"]
 
