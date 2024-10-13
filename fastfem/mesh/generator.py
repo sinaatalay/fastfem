@@ -6,6 +6,7 @@ also avoids creating duplicate entities in the Gmsh model by checking if the ent
 already exists.
 """
 
+import copy
 from typing import Literal, Optional
 
 import gmsh
@@ -82,6 +83,18 @@ class Geometry:
                 cls._line_point_tags == np.array([point.tag for point in entity.points])
             ).all(axis=1)
             entities = cls._lines
+
+            # Check lines in the opposite direction:
+            if not comparison.any():
+                comparison = (
+                    cls._line_point_tags
+                    == np.array([point.tag for point in entity.points[::-1]])
+                ).all(axis=1)
+                if comparison.any():
+                    where_true = np.where(comparison)[0][0]
+                    new_line = copy.deepcopy(entities[where_true])
+                    return -new_line
+
         elif isinstance(entity, Surface):
             entity_lines = np.array([line.tag for line in entity.lines])
             comparison = np.array(
@@ -285,8 +298,8 @@ class Surface:
         # Make sure all the lines are transfinite if the surface is transfinite
         self.transfinite = transfinite
         if self.transfinite:
-            they_are_all_transfinite = all([line.transfinite for line in lines])
-            if not they_are_all_transfinite:
+            lines_are_all_transfinite = all([line.transfinite for line in lines])
+            if not lines_are_all_transfinite:
                 raise ValueError(
                     "If you would like to create a transfinite surface, all the lines'"
                     " number_of_nodes argument must be provided."
@@ -306,7 +319,7 @@ class Surface:
             elif line.points[1].tag == current_point_tag:
                 # If the line is in the opposite direction, use negative tag
                 ordered_lines.append(-line)
-                current_point_tag = line.points[0].tag
+                current_point_tag = line.points[1].tag
             else:
                 raise ValueError(
                     "Lines are not properly connected. Make sure the lines are ordered."

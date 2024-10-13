@@ -175,7 +175,7 @@ relative_files = true
 
 [tool.coverage.report]
 # Don't include these lines in the coverage report:
-exclude_lines = ["if __name__ == .__main__.:"]
+exclude_lines = ["if __name__ == .__main__.:", "return __all__"]
 
 
 [tool.pytest.ini_options]

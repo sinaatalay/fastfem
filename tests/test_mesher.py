@@ -26,8 +26,10 @@ def test_lines_database():
     l1 = mg.Line(p1, p2)
     l2 = mg.Line(p1, p3)
     l3 = mg.Line(p1, p2)
+    l4 = mg.Line(p2, p1)
 
     assert l1.tag == l3.tag
+    assert l4.tag == -l1.tag
     assert mg.Geometry().lines == [l1, l2]
 
 
@@ -49,6 +51,63 @@ def test_surfaces_database():
 
     assert s1.tag == s3.tag
     assert mg.Geometry().surfaces == [s1, s2]
+
+
+def test_negative_duplicate_lines():
+    l1 = mg.Line(mg.Point(0.0, 0.0, 0.0), mg.Point(1.0, 0.0, 0.0))
+    l2 = mg.Line(mg.Point(1.0, 0.0, 0.0), mg.Point(0.0, 0.0, 0.0))
+
+    assert l1.tag == -l2.tag
+
+
+def test_invalid_surface_mesh():
+    l1 = mg.Line(mg.Point(0.0, 0.0, 0.0), mg.Point(1.0, 0.0, 0.0))
+    l2 = mg.Line(mg.Point(1.0, 0.0, 0.0), mg.Point(1.0, 1.0, 0.0))
+    l3 = mg.Line(mg.Point(1.0, 1.0, 0.0), mg.Point(0.0, 1.0, 0.0))
+    l4 = mg.Line(mg.Point(0.0, 1.0, 0.0), mg.Point(0.0, 0.0, 0.0))
+
+    with pytest.raises(ValueError):
+        # Surface cannot be transfinite if lines are not transfinite
+        # (number_of_nodes is None for at least one line)
+        mg.Surface([l1, l2, l3, l4], transfinite=True)
+
+
+def test_invalid_surface_mesh_2():
+    l1 = mg.Line(mg.Point(0.0, 0.0, 0.0), mg.Point(0.5, 0.0, 0.0), number_of_nodes=10)
+    l2 = mg.Line(mg.Point(0.5, 0.0, 0.0), mg.Point(1.0, 0.0, 0.0), number_of_nodes=10)
+    l3 = mg.Line(mg.Point(1.0, 0.0, 0.0), mg.Point(1.0, 1.0, 0.0), number_of_nodes=10)
+    l4 = mg.Line(mg.Point(1.0, 1.0, 0.0), mg.Point(0.0, 1.0, 0.0), number_of_nodes=10)
+    l5 = mg.Line(mg.Point(0.0, 1.0, 0.0), mg.Point(0.0, 0.0, 0.0), number_of_nodes=10)
+
+    with pytest.raises(ValueError):
+        # Transfinite surfaces must have 3 or 4 lines
+        mg.Surface([l1, l2, l3, l4, l5], transfinite=True)
+
+
+def test_invalid_surface_mesh_3():
+    l1 = mg.Line(mg.Point(0.0, 0.0, 0.0), mg.Point(0.5, 0.0, 0.0))
+    l2 = mg.Line(mg.Point(0.5, 0.0, 0.0), mg.Point(1.0, 0.0, 0.0))
+    with pytest.raises(ValueError):
+        mg.Surface([l1, l2])
+
+
+def test_surface_with_lines_in_wrong_order():
+    l1 = mg.Line(mg.Point(0.0, 0.0, 0.0), mg.Point(1.0, 0.0, 0.0))
+    l2 = mg.Line(mg.Point(1.0, 0.0, 0.0), mg.Point(1.0, 1.0, 0.0))
+    l3 = mg.Line(mg.Point(1.0, 1.0, 0.0), mg.Point(0.0, 1.0, 0.0))
+    l4 = mg.Line(mg.Point(0.0, 1.0, 0.0), mg.Point(0.0, 0.0, 0.0))
+
+    with pytest.raises(ValueError):
+        mg.Surface([l3, l2, l1, l4])
+
+
+def test_surface_with_lines_correct_order_but_wrong_orientation():
+    l1 = mg.Line(mg.Point(0.0, 0.0, 0.0), mg.Point(1.0, 0.0, 0.0))
+    l2 = mg.Line(mg.Point(1.0, 0.0, 0.0), mg.Point(1.0, 1.0, 0.0))
+    l3 = mg.Line(mg.Point(1.0, 1.0, 0.0), mg.Point(0.0, 1.0, 0.0))
+    l4 = mg.Line(mg.Point(0.0, 1.0, 0.0), mg.Point(0.0, 0.0, 0.0))
+
+    mg.Surface([l1, l2, -l3, l4])
 
 
 @pytest.mark.parametrize(
