@@ -72,7 +72,7 @@ class Rectangle:
             element_type=self.element_type,
             domain_name="domain",
         )
-        Geometry().mesh()
+        self.mesh = Geometry().mesh()
 
 
 @dataclasses.dataclass(kw_only=True)

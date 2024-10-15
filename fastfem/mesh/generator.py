@@ -24,7 +24,27 @@ def __dir__() -> list[str]:
 gmsh.initialize()
 
 # The available 2D element types:
+ZeroDElementType = Literal["point"]
+OneDElementType = Literal["line"]
 TwoDElementType = Literal["triangle", "quadrangle"]
+
+gmsh_element_type_dictionary: dict[
+    int, ZeroDElementType | OneDElementType | TwoDElementType
+] = {
+    1: "line",
+    2: "triangle",
+    3: "quadrangle",
+    15: "point",
+}
+
+
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class Mesh:
+    type: ZeroDElementType | OneDElementType | TwoDElementType
+    node_tags: np.ndarray
+    coordinates_of_nodes: np.ndarray
+    element_tags: np.ndarray
+    nodes_of_elements: np.ndarray
 
 
 class Geometry:
@@ -48,6 +68,8 @@ class Geometry:
     _points: list["Point"] = []
     _lines: list["Line"] = []
     _surfaces: list["Surface"] = []
+
+    _domains: dict[tuple[str, int], int] = {}  # {(domain_name, dim): tag}
 
     _points_coordinates: np.ndarray = np.empty((0, 3), dtype=np.float64)
     _line_point_tags: np.ndarray = np.empty((0, 2), dtype=np.int64)
@@ -229,13 +251,73 @@ class Geometry:
         for domain_name, domain_entities in domains.items():
             dim = list(domain_entities.keys())[0]
             tags = domain_entities[dim]
-            gmsh.model.add_physical_group(dim, tags, name=domain_name)
+            domain_tag = gmsh.model.add_physical_group(dim, tags, name=domain_name)
+            cls._domains[domain_name, dim] = domain_tag
 
     @classmethod
-    def mesh(cls) -> None:
+    def mesh(cls) -> dict[tuple[str, int], list[Mesh]]:
         """Generate the mesh using Gmsh."""
         cls.create_domains()
         gmsh.model.mesh.generate()
+
+        # mesh = {(domain_name, tag): [Mesh1, Mesh2]}
+        mesh: dict[tuple[str, int], list[Mesh]] = {}
+
+        for domain_name_and_dim, domain_tag in cls._domains.items():
+            name = domain_name_and_dim[0]
+            dim = domain_name_and_dim[1]
+            nodes_from_gmsh = gmsh.model.mesh.get_nodes_for_physical_group(
+                dim, domain_tag
+            )
+            tags_of_nodes = nodes_from_gmsh[0]
+            coordinates_of_nodes = np.array(nodes_from_gmsh[1])
+
+            geometric_entities = gmsh.model.get_entities_for_physical_group(
+                dim, domain_tag
+            )
+            types_and_elements = {}
+            for entity_tag in geometric_entities:
+                elements_from_gmsh = gmsh.model.mesh.get_elements(dim, entity_tag)
+                for i, type in enumerate(elements_from_gmsh[0]):
+                    element_type = gmsh_element_type_dictionary[type]
+                    if element_type not in types_and_elements:
+                        types_and_elements[element_type] = {
+                            "element_tags": elements_from_gmsh[1][i],
+                            "nodes_of_elements": elements_from_gmsh[2][i],
+                        }
+                    else:
+                        types_and_elements[element_type]["element_tags"] = np.vstack(
+                            [
+                                types_and_elements[element_type]["element_tags"],
+                                elements_from_gmsh[1][i],
+                            ]
+                        )
+                        types_and_elements[element_type]["nodes_of_elements"] = (
+                            np.vstack(
+                                [
+                                    types_and_elements[element_type][
+                                        "nodes_of_elements"
+                                    ],
+                                    elements_from_gmsh[2][i],
+                                ]
+                            )
+                        )
+            # For each element type, create a Mesh object and append it to the meshes:
+            meshes: list[Mesh] = []
+            for element_type, elements_and_nodes in types_and_elements.items():
+                meshes.append(
+                    Mesh(
+                        type=element_type,
+                        node_tags=tags_of_nodes,  # type: ignore
+                        coordinates_of_nodes=coordinates_of_nodes,  # type: ignore
+                        element_tags=elements_and_nodes["element_tags"],
+                        nodes_of_elements=elements_and_nodes["nodes_of_elements"],
+                    )
+                )
+
+            mesh[name, domain_tag] = meshes
+
+        return mesh
 
     @property
     def points(self) -> list["Point"]:
