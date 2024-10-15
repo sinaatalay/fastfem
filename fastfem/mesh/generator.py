@@ -7,7 +7,8 @@ already exists.
 """
 
 import copy
-from typing import Literal, Optional
+from typing import Literal, Optional, Any
+import dataclasses
 
 import gmsh
 import numpy as np
@@ -198,9 +199,42 @@ class Geometry:
         gmsh.clear()
 
     @classmethod
+    def create_domains(cls) -> None:
+        """Create physical groups in Gmsh."""
+        gmsh.model.occ.synchronize()
+
+        # domains = {domain_name: {dim: [tags]}}
+        domains: dict[str, dict[int, list[int]]] = {}
+
+        def find_their_domains(
+            entities: list[Point] | list[Line] | list[Surface], dim: int
+        ) -> None:
+            for entity in entities:
+                if entity.domain_name:
+                    if entity.domain_name not in domains:
+                        domains[entity.domain_name] = {dim: []}
+                    try:
+                        domains[entity.domain_name][dim].append(entity.tag)
+                    except KeyError:
+                        raise ValueError(
+                            "The same domain name cannot be used for entities of"
+                            " different dimensions (a point and a line cannot have the"
+                            " same domain name, for example)."
+                        )
+
+        find_their_domains(cls._points, 0)
+        find_their_domains(cls._lines, 1)
+        find_their_domains(cls._surfaces, 2)
+
+        for domain_name, domain_entities in domains.items():
+            dim = list(domain_entities.keys())[0]
+            tags = domain_entities[dim]
+            gmsh.model.add_physical_group(dim, tags, name=domain_name)
+
+    @classmethod
     def mesh(cls) -> None:
         """Generate the mesh using Gmsh."""
-        gmsh.model.occ.synchronize()
+        cls.create_domains()
         gmsh.model.mesh.generate()
 
     @property
@@ -219,6 +253,7 @@ class Geometry:
         return self._surfaces
 
 
+@dataclasses.dataclass
 class Point:
     """Create a point with the given coordinates.
 
@@ -226,10 +261,17 @@ class Point:
         x (float): The x-coordinate of the point.
         y (float): The y-coordinate of the point.
         z (float): The z-coordinate of the point.
+        domain_name (Optional[str], optional): The name of the domain the point belongs
+        to. Defaults to None.
     """
 
-    def __init__(self, x: float, y: float, z: float):
-        self.coordinates = (x, y, z)
+    x: float
+    y: float
+    z: float
+    domain_name: Optional[str] = None
+
+    def __post_init__(self):
+        self.coordinates = (self.x, self.y, self.z)
 
         point = Geometry()._add_point(self)
         if point:
@@ -237,39 +279,46 @@ class Point:
             # one
             self.__dict__.update(point.__dict__)
         else:
-            self.tag: int = gmsh.model.occ.addPoint(
-                self.coordinates[0], self.coordinates[1], self.coordinates[2]
-            )
+            self.tag: int = gmsh.model.occ.add_point(self.x, self.y, self.z)
 
 
+@dataclasses.dataclass
 class Line:
     """Create a line with the given points.
 
     Args:
-        p1 (Point): The first point of the line.
-        p2 (Point): The second point of the line.
+        start_point (Point): The start point of the line.
+        end_point (Point): The end point of the line.
         number_of_nodes (Optional[int], optional): The number of nodes on the line. If
         provided, the line will be transfinite. Defaults to None.
+        domain_name (Optional[str], optional): The name of the domain the line belongs
+        to. Defaults to None.
     """
 
-    def __init__(self, p1: Point, p2: Point, number_of_nodes: Optional[int] = None):
-        self.points = (p1, p2)
+    start_point: Point
+    end_point: Point
+    number_of_nodes: Optional[int] = None
+    domain_name: Optional[str] = None
+
+    def __post_init__(
+        self,
+    ):
+        self.points = (self.start_point, self.end_point)
 
         line = Geometry()._add_line(self)
         if line:
             # This line already exists, send the old line instead of creating a new one
             self.__dict__.update(line.__dict__)
         else:
-            self.tag: int = gmsh.model.occ.addLine(
+            self.tag: int = gmsh.model.occ.add_line(
                 self.points[0].tag, self.points[1].tag
             )
 
             self.transfinite = False
-            self.number_of_nodes = number_of_nodes
             if self.number_of_nodes:
                 self.transfinite = True
                 gmsh.model.occ.synchronize()
-                gmsh.model.mesh.setTransfiniteCurve(self.tag, self.number_of_nodes)
+                gmsh.model.mesh.set_transfinite_curve(self.tag, self.number_of_nodes)
 
     def __neg__(self) -> "Line":
         """Create a new line with the opposite orientation."""
@@ -279,13 +328,29 @@ class Line:
         return self
 
 
+@dataclasses.dataclass
 class Surface:
-    def __init__(
-        self,
-        lines: list[Line],
-        transfinite: bool = False,
-        element_type: TwoDElementType = "quadrangle",
-    ):
+    """Create a surface with the given lines.
+
+    Args:
+        lines (list[Line]): The lines that form the surface. The lines must be
+        connected (each line's end point is the start point of the next line).
+        transfinite (bool, optional): If True, the surface will be transfinite. All the
+        lines' number_of_nodes argument must be provided if the surface is transfinite.
+        Defaults to False.
+        element_type (TwoDElementType, optional): The type of element to use. Defaults
+        to "triangle".
+        domain_name (Optional[str], optional): The name of the domain the surface
+        belongs to. Defaults to None.
+
+    """
+
+    lines: list[Line]
+    transfinite: bool = False
+    element_type: TwoDElementType = "triangle"
+    domain_name: Optional[str] = None
+
+    def __post_init__(self):
         """Create a surface with the given lines.
 
         Args:
@@ -296,23 +361,22 @@ class Surface:
             transfinite. Defaults to False.
         """
         # Make sure all the lines are transfinite if the surface is transfinite
-        self.transfinite = transfinite
         if self.transfinite:
-            lines_are_all_transfinite = all([line.transfinite for line in lines])
+            lines_are_all_transfinite = all([line.transfinite for line in self.lines])
             if not lines_are_all_transfinite:
                 raise ValueError(
                     "If you would like to create a transfinite surface, all the lines'"
                     " number_of_nodes argument must be provided."
                 )
 
-            if len(lines) not in [3, 4]:
+            if len(self.lines) not in [3, 4]:
                 raise ValueError("All the transfinite surfaces must have 3 or 4 lines.")
 
         # Make sure the points of lines are connected (each line's end point is the
         # start point of the next line) and lines are in clockwise order:
         ordered_lines: list[Line] = []
-        current_point_tag = lines[0].points[0].tag
-        for line in lines:
+        current_point_tag = self.lines[0].points[0].tag
+        for line in self.lines:
             if line.points[0].tag == current_point_tag:
                 ordered_lines.append(line)
                 current_point_tag = line.points[1].tag
@@ -326,7 +390,7 @@ class Surface:
                 )
 
         # Check if the loop is closed
-        if current_point_tag != lines[0].points[0].tag:
+        if current_point_tag != self.lines[0].points[0].tag:
             raise ValueError("Lines do not form a closed loop.")
 
         self.lines = ordered_lines
@@ -339,15 +403,14 @@ class Surface:
         else:
             # Create a line loop and a plane surface
             lines_tags = [line.tag for line in ordered_lines]
-            line_loop_tag = gmsh.model.occ.addCurveLoop(lines_tags)
-            self.tag = gmsh.model.occ.addPlaneSurface([line_loop_tag])
-            self.element_type = element_type
+            line_loop_tag = gmsh.model.occ.add_curve_loop(lines_tags)
+            self.tag = gmsh.model.occ.add_plane_surface([line_loop_tag])
 
             if self.transfinite or self.element_type == "quadrangle":
                 gmsh.model.occ.synchronize()
 
             if self.transfinite:
-                gmsh.model.mesh.setTransfiniteSurface(self.tag)
+                gmsh.model.mesh.set_transfinite_surface(self.tag)
 
             if self.element_type == "quadrangle":
-                gmsh.model.mesh.setRecombine(2, self.tag)
+                gmsh.model.mesh.set_recombine(2, self.tag)

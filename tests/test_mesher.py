@@ -2,6 +2,7 @@ import pytest
 
 import fastfem.mesh as m
 import fastfem.mesh.generator as mg
+import gmsh
 
 
 def setup_function(function):
@@ -108,6 +109,36 @@ def test_surface_with_lines_correct_order_but_wrong_orientation():
     l4 = mg.Line(mg.Point(0.0, 1.0, 0.0), mg.Point(0.0, 0.0, 0.0))
 
     mg.Surface([l1, l2, -l3, l4])
+
+
+def test_invalid_domains():
+    with pytest.raises(ValueError):
+        l1 = mg.Line(
+            mg.Point(0.0, 0.0, 0.0),
+            mg.Point(1.0, 0.0, 0.0, domain_name="bottom_boundary"),
+            domain_name="bottom_boundary",
+        )
+        mg.Geometry().create_domains()
+
+
+def test_valid_domains():
+    l1 = mg.Line(
+        mg.Point(1.0, 0.0, 0.0),
+        mg.Point(1.0, 1.0, 0.0),
+        domain_name="right_boundary",
+    )
+    l2 = mg.Line(
+        mg.Point(1.0, 1.0, 0.0),
+        mg.Point(1.0, 2.0, 0.0),
+        domain_name="right_boundary",
+    )
+
+    mg.Geometry().create_domains()
+
+    entities = list(gmsh.model.get_entities_for_physical_group(1, 1))
+    entities = [int(tag) for tag in entities]
+
+    assert entities == [l1.tag, l2.tag]
 
 
 @pytest.mark.parametrize(

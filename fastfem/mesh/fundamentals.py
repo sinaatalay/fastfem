@@ -47,25 +47,30 @@ class Rectangle:
                     Point(0, 0, 0),
                     Point(self.horizontal_length, 0, 0),
                     self.nodes_in_horizontal_direction,
+                    domain_name="bottom_boundary",
                 ),
                 Line(
                     Point(self.horizontal_length, 0, 0),
                     Point(self.horizontal_length, self.vertical_length, 0),
                     self.nodes_in_vertical_direction,
+                    domain_name="right_boundary",
                 ),
                 Line(
                     Point(self.horizontal_length, self.vertical_length, 0),
                     Point(0, self.vertical_length, 0),
                     self.nodes_in_horizontal_direction,
+                    domain_name="top_boundary",
                 ),
                 Line(
                     Point(0, self.vertical_length, 0),
                     Point(0, 0, 0),
                     self.nodes_in_vertical_direction,
+                    domain_name="left_boundary",
                 ),
             ],
             transfinite=self.transfinite,
             element_type=self.element_type,
+            domain_name="domain",
         )
         Geometry().mesh()
 
