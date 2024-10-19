@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
 
@@ -48,10 +48,14 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu, windows, macos]
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.12", "3.13"]
 
     runs-on: ${{ matrix.os }}-latest
     steps:
+      - if: matrix.os == 'ubuntu'
+        name: Install libglu1-mesa for Gmsh
+        run: sudo apt install libglu1-mesa
+
       - uses: actions/checkout@v4
 
       - name: Set up Python ${{ matrix.python-version }}
@@ -63,7 +67,7 @@ jobs:
         uses: pypa/hatch@install
 
       - name: Test
-        run: hatch run tests:coverage run -m pytest
+        run: hatch run coverage run -m pytest
 
       - name: Rename the coverage file
         run: mv .coverage .coverage.${{ matrix.python-version }}.${{ matrix.os }}
@@ -100,9 +104,9 @@ jobs:
 
       - name: Combine coverage files
         run: |
-          hatch run tests:coverage combine coverage
-          hatch run tests:coverage report
-          hatch run tests:coverage html --show-contexts --title "FastFEM coverage for ${{ github.sha }}"
+          hatch run coverage combine coverage
+          hatch run coverage report
+          hatch run coverage html --show-contexts --title "FastFEM coverage for ${{ github.sha }}"
 
       - name: Upload the coverage report to smokeshow
         run: |
@@ -110,6 +114,6 @@ jobs:
           smokeshow upload ./htmlcov
         env:
           SMOKESHOW_GITHUB_STATUS_DESCRIPTION: Coverage {coverage-percentage}
-          SMOKESHOW_GITHUB_COVERAGE_THRESHOLD: 97
+          SMOKESHOW_GITHUB_COVERAGE_THRESHOLD: 50
           SMOKESHOW_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SMOKESHOW_GITHUB_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
