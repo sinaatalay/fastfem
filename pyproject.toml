@@ -59,11 +59,12 @@ readme = "README.md"
 requires-python = '>=3.12'
 # The package depends on the packages below. They will be installed automatically when
 # the package is installed by users.
-dependencies = ["jax==0.4.33", "matplotlib==3.9.2"]
+dependencies = ["jax==0.4.33", "matplotlib==3.9.2", "gmsh==4.13.1"]
 classifiers = [
     "Intended Audience :: Science/Research",
     "Intended Audience :: Education",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ] # Go to https://pypi.org/classifiers/ to see all classifiers
@@ -96,11 +97,13 @@ Changelog = 'https://sinatay.github.io/fastfem/changelog'
 [tool.hatch.envs.default]
 # Dependencies to be installed in the `default` virtual environment.
 dependencies = [
-    "ruff",    # to lint the code
-    "black",   # to format the code
-    "ipython", # for ipython shell
-    "isort",   # to sort the imports  
-    "pyright", # to check the types
+    "ruff",     # to lint the code
+    "black",    # to format the code
+    "ipython",  # for ipython shell
+    "isort",    # to sort the imports  
+    "pyright",  # to check the types
+    "pytest",   # to run the tests
+    "coverage", # to measure the test coverage
 ]
 path = ".venv"
 [tool.hatch.envs.default.scripts]
@@ -111,9 +114,14 @@ format = "black fastfem && black tests" # hatch run format
 # Lint the code with `ruff`:
 lint = "ruff check fastfem && ruff check tests" # hatch run lint
 # Sort the imports with `isort`:
-sort-imports = "isort fastfem && isort tests" # hatch run sort-imports
+sort = "isort fastfem && isort tests" # hatch run sort
 # Check types with `pyright`:
 check-types = "pyright fastfem && pyright tests" # hatch run check-types
+# Run the tests:
+tests = "pytest" # hatch run tests 
+# Run the tests and generate the coverage report as HTML:
+tests-and-coverage = "coverage run -m pytest && coverage report && coverage html --show-contexts" # hatch run tests-and-coverage
+
 
 [tool.hatch.envs.docs]
 # Dependencies to be installed in the `docs` virtual environment.
@@ -131,21 +139,6 @@ build = "mkdocs build --clean --strict" # hatch run docs:build
 # Start the development server for the documentation with `mkdocs`:
 serve = "mkdocs serve" # hatch run docs:serve
 
-[tool.hatch.envs.tests]
-# Dependencies to be installed in the `tests` virtual environment.
-dependencies = [
-    "pytest==8.3.2",        # to run the tests
-    "coverage==7.6.1",      # to generate coverage reports
-    "time-machine==2.15.0", # to select an arbitrary date and time for testing
-    "pypdf==4.3.1",         # to read PDF files
-]
-path = ".venv-tests"
-
-[tool.hatch.envs.tests.scripts]
-# Run the tests:
-run = "pytest" # hatch run tests:run  
-# Run the tests and generate the coverage report as HTML:
-run-and-report = "coverage run -m pytest && coverage report && coverage html --show-contexts" # hatch run tests:coverage
 
 # ======================================================================================
 # Virtual Environments Above ===========================================================
@@ -182,7 +175,7 @@ relative_files = true
 
 [tool.coverage.report]
 # Don't include these lines in the coverage report:
-exclude_lines = ["if __name__ == .__main__.:"]
+exclude_lines = ["if __name__ == .__main__.:", "return __all__"]
 
 
 [tool.pytest.ini_options]

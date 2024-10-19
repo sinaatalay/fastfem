@@ -1,16 +1,7 @@
 import pytest
 import numpy as np
 
-from fastfem.elements import _poly_util
 from fastfem.elements import spectral_element
-
-
-def get_ref_posmatrix(order: int):
-    knots = _poly_util.get_GLL_knots(order)
-    out = np.empty((order + 1, order + 1, 2))
-    out[:, :, 0] = knots[:, np.newaxis]
-    out[:, :, 1] = knots[np.newaxis, :]
-    return out
 
 
 @pytest.fixture(scope="module", params=[3, 4, 5])
@@ -166,7 +157,10 @@ def test_lagrange_poly_coefs1D(element):
         np.testing.assert_almost_equal(
             elem._lagrange_derivs[deriv_order],
             P,
-            err_msg=f"derivative L^{({deriv_order})} is not being set properly in the dictionary!",
+            err_msg=(
+                f"derivative L^{({deriv_order})} is not being set properly in the"
+                " dictionary!"
+            ),
         )
         assert set(elem._lagrange_derivs) == set(
             np.arange(deriv_order + 1)
@@ -199,7 +193,10 @@ def test_lagrange_poly_coefs1D(element):
             Lp(test_x),
             (L(test_x + h) - L(test_x - h)) / (2 * h),
             decimal=sigfigs,
-            err_msg=f"derivative L^({deriv_order}) does not match the central difference on L^({deriv_order-1})!",
+            err_msg=(
+                f"derivative L^({deriv_order}) does not match the central difference on"
+                f" L^({deriv_order-1})!"
+            ),
         )
 
 
@@ -233,7 +230,10 @@ def test_lagrange_evals1D(element, broadcastable_shapes):
             np.testing.assert_almost_equal(
                 Px,
                 np.dot(P[ind, :], x ** np.arange(degp1)),
-                err_msg=f"index {it.multi_index}: L_{ind}^({deriv_order}) ({x}) disagreement",
+                err_msg=(
+                    f"index {it.multi_index}: L_{ind}^({deriv_order}) ({x})"
+                    " disagreement"
+                ),
             )
 
 
@@ -291,9 +291,10 @@ def test_real_to_reference_interior(transformed_element, ref_coords):
     recover_ref = elem.locate_point(
         points, true_pos[0], true_pos[1], tol=1e-10, ignore_out_of_bounds=True
     )
-    assert recover_ref[
-        1
-    ], "Test with ignore_out_of_bounds flag. Should be True for point being found (loss(recover_ref) < tol)."
+    assert recover_ref[1], (
+        "Test with ignore_out_of_bounds flag. Should be True for point being found"
+        " (loss(recover_ref) < tol)."
+    )
     np.testing.assert_almost_equal(
         recover_ref[0], ref_coords, err_msg="Test with ignore_out_of_bounds flag"
     )
@@ -301,9 +302,10 @@ def test_real_to_reference_interior(transformed_element, ref_coords):
     recover_ref = elem.locate_point(
         points, true_pos[0], true_pos[1], tol=1e-10, ignore_out_of_bounds=False
     )
-    assert recover_ref[
-        1
-    ], "Test without ignore_out_of_bounds flag. Should be True for point being found (loss(recover_ref) < tol)."
+    assert recover_ref[1], (
+        "Test without ignore_out_of_bounds flag. Should be True for point being found"
+        " (loss(recover_ref) < tol)."
+    )
     np.testing.assert_almost_equal(
         recover_ref[0], ref_coords, err_msg="Test without ignore_out_of_bounds flag"
     )
@@ -495,6 +497,36 @@ def test_bdry_integ(transformed_element, boundary_id):
     field[enumeration[0], enumeration[1], enumeration[0], enumeration[1]] = 1
     with pytest.raises(NotImplementedError):
         elem._bdry_normalderiv(points, boundary_id, field)
+
+
+@pytest.mark.parametrize("deg", [1, 2, 5, 10])
+def test_gll_build(deg):
+    x, w, L = spectral_element._build_GLL(deg)
+
+    # verify shapes
+    assert x.shape == (deg + 1,)
+    assert w.shape == (deg + 1,)
+    assert L.shape == (deg + 1, deg + 1)
+
+    # verify quad degree
+    for i in range(deg * 2 - 1):
+
+        def F(x):
+            return ((x + 1) / 2) ** i
+
+        quad = sum(F(x) * w)
+        res_true = 2 / (i + 1)
+        assert quad == pytest.approx(res_true, abs=1e-8), (
+            "GLL quadrature must be exact for polynomials up to degree 2n-1"
+            f" ({2*deg - 1})! "
+            + f"Failed at degree {i}."
+        )
+
+    # verify L
+    evals = np.einsum(
+        "ik,jk->ij", L, x[:, np.newaxis] ** np.arange(deg + 1)[np.newaxis, :]
+    )
+    np.testing.assert_almost_equal(evals, np.eye(deg + 1), decimal=8)
 
 
 if __name__ == "__main__":

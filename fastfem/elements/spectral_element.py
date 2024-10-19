@@ -1,10 +1,20 @@
 import numpy as np
-import fastfem.elements._poly_util as GLL_UTIL
 import fastfem.elements.element as element
 
 
 class DeformationGradient2DBadnessException(Exception):
-    def __init__(self, val, x, y):
+    """An exception called when the deformation gradient is too poor for invertibility.
+
+    Args:
+        val (float): a badness parameter det(F) / (`char_x` * `char_y`) for
+            characteristic lengths `char_x` and `char_y`. This may be in reference
+            to the size of the element, so that scaling the element yields the same
+            badness parameter.
+        x (float): the x position in local (reference) coordinates of the determinant.
+        y (float): the y position in local (reference) coordinates of the determinant.
+    """
+
+    def __init__(self, val: float, x: float, y: float):
         super().__init__(
             "Element has too poor of a shape!\n"
             + f"   def_grad badness = {val:e} at local coordinates"
@@ -14,6 +24,63 @@ class DeformationGradient2DBadnessException(Exception):
         self.x = x
         self.y = y
         self.val = val
+
+
+def _build_GLL(n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Builds the items necessary for GLL quadrature of degree `n` (`n+1`-node).
+
+    Args:
+        n (int): The degree of the quadrature. This results in `n+1` nodes for the
+            quadrature.
+
+
+    Returns:
+        tuple[np.ndarray,np.ndarray,np.ndarray]: A tuple `(x,w,L)` for knots
+            (node positions) `x`, weights `w`, and Lagrange interpolation polynomials
+            `L` associated with the quadrature. A quadrature for a vectorized function f
+            is computed as `sum(f(x) * w)`, while the $i^{th}$ Lagrange polynomial is
+            $L_i(x) = \ sum_{k=0}^{n} L[i,k] x^k$.
+    """
+    if n == 1:
+        return np.array((-1, 1)), np.array((1, 1)), np.array([[0.5, -0.5], [0.5, 0.5]])
+
+    leg_x = (
+        np.polynomial.Polynomial(np.polynomial.legendre.leg2poly([0] * n + [1]))
+        .deriv()
+        .roots()
+    )
+    np1 = n + 1
+    x = np.array([-1, *leg_x, 1])
+
+    # initialize L to 1; operate in quad precision at derivation
+    L = np.zeros((np1, np1), dtype=np.float128)
+    L[:, 0] = 1
+
+    tmp = np.empty((n, n), dtype=np.float128)
+    for i, xi in enumerate(x):
+        mask = np.arange(np1) != i
+
+        # what we multiply (x-xi) to
+        tmp[:, :] = L[mask, :-1]
+        tmp[:, :] /= x[mask, np.newaxis] - xi
+
+        # add tmp*(-xi)
+        L[mask, :-1] = tmp * -xi
+        # add tmp*x
+        L[mask, 1:] += tmp
+
+    # return to double precision
+    L = L.astype(np.float64)
+
+    # compute weights by integrating L
+    endpoint_pows = (
+        np.array([-1, 1])[:, np.newaxis] ** np.arange(1, np1 + 1)[np.newaxis, :]
+    )
+    endpoints_integ = np.einsum(
+        "ik,k,jk->ij", L, 1 / np.arange(1, np1 + 1), endpoint_pows
+    )
+
+    return x, endpoints_integ[:, 1] - endpoints_integ[:, 0], L
 
 
 class SpectralElement2D(element.Element):
@@ -26,23 +93,26 @@ class SpectralElement2D(element.Element):
         self.degree = degree  # poly degree (#nodes - 1)
         self.num_nodes = degree + 1
 
-        # quadrature values: int_{-1}^1 f dx ~ sum(f(knots) * weights)
-        self.knots = GLL_UTIL.get_GLL_knots(degree)
-        self.weights = GLL_UTIL.get_GLL_weights(degree)
-
-        # lagrange interpolation polynomials L_i(x) = sum_k ( L[i,k] * x^k )
-        self._lagrange_polys = np.array(GLL_UTIL.build_GLL_polys(degree))
+        self.knots, self.weights, self._lagrange_polys = _build_GLL(degree)
         # store derivatives of L_i as needed, so they need only be computed once
         self._lagrange_derivs = dict()
         self._lagrange_derivs[0] = self._lagrange_polys
 
-    def lagrange_poly1D(self, deriv_order: int = 0):
+    def lagrange_poly1D(self, deriv_order: int = 0) -> np.ndarray:
         """
-        Returns the polynomial coefficients P[i,k], where
-        (d/dx)^{deriv_order} L_{i}(x) = sum_k(P[i,k] * x^k).
+        Returns the polynomial coefficients `P[i,k]`, where
+        $\ frac{d^{r}}{dx^{r}} L_{i}(x) = \ sum_k P[i,k] x^k$ with $r$ as `deriv_order`.
 
-        deriv_order (default 0) is expected to be an integer between 0
-        (inclusive) and degree+1 (exclusive), but this check is not done.
+        deriv_order (default 0)
+
+        Args:
+            deriv_order (int, optional): The order $r$ of the derivative. This is
+            expected to be an integer between 0 (inclusive) and degree+1 (exclusive),
+            but this check is not done. Defaults to 0.
+
+        Returns:
+            np.ndarray: The coefficient array `P[i,k]` which is of shape
+            `(degree + 1, degree + 1 - deriv_order)`
         """
         if deriv_order in self._lagrange_derivs:
             return self._lagrange_derivs[deriv_order]
@@ -55,15 +125,22 @@ class SpectralElement2D(element.Element):
         self._lagrange_derivs[deriv_order] = coefs
         return coefs
 
-    def interp_field(self, field, X, Y):
+    def interp_field(
+        self, field: np.ndarray, X: np.ndarray, Y: np.ndarray
+    ) -> np.ndarray:
         """Evaluates field at (X,Y) in reference coordinates.
         The result is an array of shape (*pointshape,*fieldshape),
         where field is of shape (self.degree+1,self.degree+1,*fieldshape)
         X and Y must have compatible shape, broadcasting to pointshape.
 
+        Args:
+            field (np.ndarray): an array of shape (degree+1,degree+1,*fieldshape)
+                representing the field to be interpolated.
+            X (np.ndarray): an array of x values (in reference coordinates).
+            Y (np.ndarray): an array of y values (in reference coordinates).
 
-        field is an array of shape (degree+1,degree+1,*fieldshape) where
-        field[i,j] = F(x[i],x[j]) where x is the vector of knots.
+        Returns:
+            np.ndarray: The interpolated values `field(X,Y)`
         """
         if not isinstance(X, np.ndarray):
             X = np.array(X)
