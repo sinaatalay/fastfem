@@ -53,10 +53,10 @@ def _build_GLL(n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     x = np.array([-1, *leg_x, 1])
 
     # initialize L to 1; operate in quad precision at derivation
-    L = np.zeros((np1, np1), dtype=np.float128)
+    L = np.zeros((np1, np1), dtype=np.longdouble)
     L[:, 0] = 1
 
-    tmp = np.empty((n, n), dtype=np.float128)
+    tmp = np.empty((n, n), dtype=np.longdouble)
     for i, xi in enumerate(x):
         mask = np.arange(np1) != i
 
