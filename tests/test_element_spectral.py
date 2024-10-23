@@ -326,18 +326,22 @@ def test_field_grad(transformed_element):
 
     # this hinges on linearity of field values
     field = np.zeros((elem.num_nodes, elem.num_nodes, elem.num_nodes, elem.num_nodes))
+    fieldshape = (elem.num_nodes, elem.num_nodes)
     enumeration = (
         np.arange(elem.num_nodes**2) % elem.num_nodes,
         np.arange(elem.num_nodes**2) // elem.num_nodes,
     )
     field[enumeration[0], enumeration[1], enumeration[0], enumeration[1]] = 1
-    grads = elem.field_grad(field, X, Y)
-    cartgrads = elem.field_grad(field, X, Y, pos_matrix=points)
+    grads = elem.field_grad(field, X, Y, fieldshape=fieldshape)
+    cartgrads = elem.field_grad(field, X, Y, pos_matrix=points,
+            fieldshape=fieldshape)
     x_derivs = (
-        elem.interp_field(field, X + h, Y) - elem.interp_field(field, X - h, Y)
+        elem.interp_field(field, X + h, Y,fieldshape=fieldshape)
+            - elem.interp_field(field, X - h, Y,fieldshape=fieldshape)
     ) / (2 * h)
     y_derivs = (
-        elem.interp_field(field, X, Y + h) - elem.interp_field(field, X, Y - h)
+        elem.interp_field(field, X, Y + h,fieldshape=fieldshape) 
+            - elem.interp_field(field, X, Y - h,fieldshape=fieldshape)
     ) / (2 * h)
     grads_comp = np.stack((x_derivs, y_derivs), -1)
     np.testing.assert_almost_equal(
@@ -357,7 +361,8 @@ def test_field_grad(transformed_element):
 
     # values are correct, now test shaped accessing: first, single values
     np.testing.assert_almost_equal(
-        elem.field_grad(field, X[0, 0], Y[0, 0]),
+        elem.field_grad(field, X[0, 0], Y[0, 0],
+            fieldshape=fieldshape),
         grads[0, 0, ...],
         err_msg="Shape-invariance test: Single floats fail",
     )
@@ -369,7 +374,8 @@ def test_field_grad(transformed_element):
         accessor_b = (np.arange(np.prod(b) * 2) % elem.num_nodes).reshape((2,) + b)
         Xa = X[*accessor_a]
         Yb = Y[*accessor_b]
-        res = elem.field_grad(field, Xa, Yb)
+        res = elem.field_grad(field, Xa, Yb,
+                fieldshape=fieldshape)
         Xc = Xa + 0 * Yb
         Yc = Yb + 0 * Xa
         it = np.nditer(Xc, flags=["multi_index"])
@@ -377,7 +383,8 @@ def test_field_grad(transformed_element):
             ind = it.multi_index
             np.testing.assert_almost_equal(
                 res[*ind, ...],
-                elem.field_grad(field, x, Yc[ind]),
+                elem.field_grad(field, x, Yc[ind],
+                        fieldshape=fieldshape),
                 err_msg=f"Shape-invariance test: pair {a}-{b} (broadcast to {c}) fails",
             )
 
@@ -462,6 +469,7 @@ def test_stiffness_matrix(transformed_element):
 
     # equiv: # L_m(x_i)L_n(x_j)
     field = np.zeros((elem.num_nodes, elem.num_nodes, elem.num_nodes, elem.num_nodes))
+    fieldshape=(elem.num_nodes, elem.num_nodes)
     enumeration = (
         np.arange(elem.num_nodes**2) % elem.num_nodes,
         np.arange(elem.num_nodes**2) // elem.num_nodes,
@@ -470,14 +478,16 @@ def test_stiffness_matrix(transformed_element):
 
     # [i,j, m,n, dim] partial_dim phi_{mn}(xi,xj)
     field_grad = elem.field_grad(
-        field, elem.knots[:, np.newaxis], elem.knots[np.newaxis, :], pos_matrix=points
+        field, elem.knots[:, np.newaxis], elem.knots[np.newaxis, :], pos_matrix=points,
+        fieldshape=fieldshape
     )
 
     # sum_{ij} w_{ij}( partial_dim phi_{mn}(xi,xj) )( partial_dim F_{ab}(xi,xj) )
     stiff = np.einsum("ij,ijmnd,ijabd->mnab", w, field_grad, field_grad)
 
     np.testing.assert_almost_equal(
-        elem.basis_stiffness_matrix_times_field(points, field), stiff
+        elem.basis_stiffness_matrix_times_field(points, field,fieldshape=fieldshape),
+        stiff
     )
 
     np.testing.assert_almost_equal(
