@@ -1,5 +1,6 @@
 import pytest
 import numpy as np
+import types
 
 from fastfem.elements import spectral_element
 
@@ -41,38 +42,54 @@ def transform_posmatrix(pos_matrix, mod, *args):
     return pos_matrix
 
 
+_PRESET_TRANSFORMS = {
+    "ref": lambda x: x,
+    "translated": lambda x: transform_posmatrix(x, "translate", 5, -2),
+    "rotated": lambda x: transform_posmatrix(x, "rotate", 1),
+    "x-scaled": lambda x: transform_posmatrix(x, "scale", 2, 1),
+    "y-scaled": lambda x: transform_posmatrix(x, "scale", 1, 2),
+    "combo1": lambda x: transform_posmatrix(
+        transform_posmatrix(x, "lin_trans", 2, 1, -1, 1), "translate", -4, 2
+    ),
+    "combo2": lambda x: transform_posmatrix(
+        transform_posmatrix(x, "lin_trans", 0.5, 1.3, 10, 0.3), "translate", 300, 600
+    ),
+}
+
+
 @pytest.fixture(
     scope="module",
-    params=["ref", "translated", "rotated", "x-scaled", "y-scaled", "combo1", "combo2"],
+    params=_PRESET_TRANSFORMS.keys(),
 )
 def transformation(request):
     name = request.param
-    if name == "ref":
-        return lambda x: x
-    if name == "translated":
-        return lambda x: transform_posmatrix(x, "translate", 5, -2)
-    if name == "rotated":
-        return lambda x: transform_posmatrix(x, "rotate", 1)
-    if name == "x-scaled":
-        return lambda x: transform_posmatrix(x, "scale", 2, 1)
-    if name == "y-scaled":
-        return lambda x: transform_posmatrix(x, "scale", 1, 2)
-    if name == "combo1":
-        return lambda x: transform_posmatrix(
-            transform_posmatrix(x, "lin_trans", 2, 1, -1, 1), "translate", -4, 2
-        )
-    if name == "combo2":
-        return lambda x: transform_posmatrix(
-            transform_posmatrix(x, "lin_trans", 0.5, 1.3, 10, 0.3),
-            "translate",
-            300,
-            600,
-        )
+    return _PRESET_TRANSFORMS[name]
 
 
 @pytest.fixture(scope="module")
 def transformed_element(element, transformation):
     return element[0], transformation(element[1]), transformation
+
+
+@pytest.fixture(params=[0, 1, 2, 3])
+def transformed_element_stack(request, element):
+    transforms = _PRESET_TRANSFORMS.values()
+    # param is number of dims for element position array
+    ndims = request.param
+    stackshape = tuple(3 for _ in range(ndims))
+    stacksize = np.prod(stackshape, dtype=int)
+
+    def stack_transform(x):
+        y = np.empty(stackshape + x.shape)
+        transformed = [f(x) for f in transforms]
+        for i in range(stacksize):
+            y[*np.unravel_index(i, stackshape), ...] = transformed[i % len(transforms)]
+        return y
+
+    pts_stack = np.permute_dims(
+        stack_transform(element[1]), (ndims, ndims + 1) + tuple(range(ndims)) + (-1,)
+    )
+    return element[0], pts_stack, stack_transform
 
 
 @pytest.fixture(
@@ -281,6 +298,21 @@ def test_reference_to_real(transformed_element, ref_coords_arr):
     )
 
 
+def test_reference_to_real_elemstack(transformed_element_stack, ref_coords_arr):
+    elem, points, transformation = transformed_element_stack
+
+    true_pos = transformation(ref_coords_arr)
+    # pad points to fit with ref_coords_arr (note last index is position coordinate)
+    points = points[..., *[np.newaxis for dim in ref_coords_arr.shape[:-1]], :]
+    test_pos = elem.reference_to_real(
+        points, *[v.squeeze(-1) for v in np.split(ref_coords_arr, 2, axis=-1)]
+    )
+    np.testing.assert_almost_equal(
+        test_pos,
+        true_pos,
+    )
+
+
 def test_real_to_reference_interior(transformed_element, ref_coords):
     elem = transformed_element[0]
     points = transformed_element[1]
@@ -333,15 +365,14 @@ def test_field_grad(transformed_element):
     )
     field[enumeration[0], enumeration[1], enumeration[0], enumeration[1]] = 1
     grads = elem.field_grad(field, X, Y, fieldshape=fieldshape)
-    cartgrads = elem.field_grad(field, X, Y, pos_matrix=points,
-            fieldshape=fieldshape)
+    cartgrads = elem.field_grad(field, X, Y, pos_matrix=points, fieldshape=fieldshape)
     x_derivs = (
-        elem.interp_field(field, X + h, Y,fieldshape=fieldshape)
-            - elem.interp_field(field, X - h, Y,fieldshape=fieldshape)
+        elem.interp_field(field, X + h, Y, fieldshape=fieldshape)
+        - elem.interp_field(field, X - h, Y, fieldshape=fieldshape)
     ) / (2 * h)
     y_derivs = (
-        elem.interp_field(field, X, Y + h,fieldshape=fieldshape) 
-            - elem.interp_field(field, X, Y - h,fieldshape=fieldshape)
+        elem.interp_field(field, X, Y + h, fieldshape=fieldshape)
+        - elem.interp_field(field, X, Y - h, fieldshape=fieldshape)
     ) / (2 * h)
     grads_comp = np.stack((x_derivs, y_derivs), -1)
     np.testing.assert_almost_equal(
@@ -361,8 +392,7 @@ def test_field_grad(transformed_element):
 
     # values are correct, now test shaped accessing: first, single values
     np.testing.assert_almost_equal(
-        elem.field_grad(field, X[0, 0], Y[0, 0],
-            fieldshape=fieldshape),
+        elem.field_grad(field, X[0, 0], Y[0, 0], fieldshape=fieldshape),
         grads[0, 0, ...],
         err_msg="Shape-invariance test: Single floats fail",
     )
@@ -374,8 +404,7 @@ def test_field_grad(transformed_element):
         accessor_b = (np.arange(np.prod(b) * 2) % elem.num_nodes).reshape((2,) + b)
         Xa = X[*accessor_a]
         Yb = Y[*accessor_b]
-        res = elem.field_grad(field, Xa, Yb,
-                fieldshape=fieldshape)
+        res = elem.field_grad(field, Xa, Yb, fieldshape=fieldshape)
         Xc = Xa + 0 * Yb
         Yc = Yb + 0 * Xa
         it = np.nditer(Xc, flags=["multi_index"])
@@ -383,8 +412,7 @@ def test_field_grad(transformed_element):
             ind = it.multi_index
             np.testing.assert_almost_equal(
                 res[*ind, ...],
-                elem.field_grad(field, x, Yc[ind],
-                        fieldshape=fieldshape),
+                elem.field_grad(field, x, Yc[ind], fieldshape=fieldshape),
                 err_msg=f"Shape-invariance test: pair {a}-{b} (broadcast to {c}) fails",
             )
 
@@ -469,7 +497,7 @@ def test_stiffness_matrix(transformed_element):
 
     # equiv: # L_m(x_i)L_n(x_j)
     field = np.zeros((elem.num_nodes, elem.num_nodes, elem.num_nodes, elem.num_nodes))
-    fieldshape=(elem.num_nodes, elem.num_nodes)
+    fieldshape = (elem.num_nodes, elem.num_nodes)
     enumeration = (
         np.arange(elem.num_nodes**2) % elem.num_nodes,
         np.arange(elem.num_nodes**2) // elem.num_nodes,
@@ -478,16 +506,19 @@ def test_stiffness_matrix(transformed_element):
 
     # [i,j, m,n, dim] partial_dim phi_{mn}(xi,xj)
     field_grad = elem.field_grad(
-        field, elem.knots[:, np.newaxis], elem.knots[np.newaxis, :], pos_matrix=points,
-        fieldshape=fieldshape
+        field,
+        elem.knots[:, np.newaxis],
+        elem.knots[np.newaxis, :],
+        pos_matrix=points,
+        fieldshape=fieldshape,
     )
 
     # sum_{ij} w_{ij}( partial_dim phi_{mn}(xi,xj) )( partial_dim F_{ab}(xi,xj) )
     stiff = np.einsum("ij,ijmnd,ijabd->mnab", w, field_grad, field_grad)
 
     np.testing.assert_almost_equal(
-        elem.basis_stiffness_matrix_times_field(points, field,fieldshape=fieldshape),
-        stiff
+        elem.basis_stiffness_matrix_times_field(points, field, fieldshape=fieldshape),
+        stiff,
     )
 
     np.testing.assert_almost_equal(

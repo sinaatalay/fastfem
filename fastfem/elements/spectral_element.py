@@ -40,7 +40,7 @@ def _build_GLL(n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
             (node positions) `x`, weights `w`, and Lagrange interpolation polynomials
             `L` associated with the quadrature. A quadrature for a vectorized function f
             is computed as `sum(f(x) * w)`, while the $i^{th}$ Lagrange polynomial is
-            $L_i(x) = \ sum_{k=0}^{n} L[i,k] x^k$.
+            $L_i(x) = \\sum_{k=0}^{n} L[i,k] x^k$.
     """
     if n == 1:
         return np.array((-1, 1)), np.array((1, 1)), np.array([[0.5, -0.5], [0.5, 0.5]])
@@ -111,7 +111,7 @@ class SpectralElement2D(element.Element):
     def lagrange_poly1D(self, deriv_order: int = 0) -> np.ndarray:
         """
         Returns the polynomial coefficients `P[i,k]`, where
-        $\ frac{d^{r}}{dx^{r}} L_{i}(x) = \ sum_k P[i,k] x^k$ with $r$ as `deriv_order`.
+        $\\frac{d^{r}}{dx^{r}} L_{i}(x) = \\sum_k P[i,k] x^k$ with $r$ as `deriv_order`.
 
         deriv_order (default 0)
 
@@ -138,7 +138,6 @@ class SpectralElement2D(element.Element):
     def interp_field(
             self, field: np.ndarray, X: np.ndarray | float, Y: np.ndarray | float,
             fieldshape: tuple[int,...] = tuple()) -> np.ndarray:
-        pass
         """Evaluates field at (X,Y) in reference coordinates.
         The result is an array of values `field(X,Y)`.
 
@@ -218,7 +217,7 @@ class SpectralElement2D(element.Element):
         def_grad_badness_tol: float =1e-4,
         ignore_out_of_bounds: bool =False,
         char_x: float|None = None,
-        char_y: float|None = None) -> tuple[tuple[float,float],bool]:
+        char_y: float|None = None) -> tuple[np.ndarray,bool]:
         """
         Attempts to find the local coordinates corresponding to the
         given global coordinates (posx,posy). Returns (local_pt,success).
@@ -388,7 +387,7 @@ class SpectralElement2D(element.Element):
 
             # check badness
             defgrad_badness = np.abs(
-                np.linalg.det([dx_l2g, dy_l2g]) / (char_x * char_y)
+                np.linalg.det([dx_l2g, dy_l2g]) / (char_x * char_y) # type: ignore
             )
             if defgrad_badness < def_grad_badness_tol:
                 raise DeformationGradient2DBadnessException(

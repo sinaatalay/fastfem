@@ -11,7 +11,7 @@ class Element(abc.ABC):
     """
 
     @abc.abstractmethod
-    def basis_shape(self) -> tuple[int]:
+    def basis_shape(self) -> tuple[int,...]:
         """Returns a tuple representing the shape of the array corresponding to the
         basis coefficients. A scalar field `f`, given as an array is expected to have
         shape `f.shape == element.basis_shape()`
