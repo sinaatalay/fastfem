@@ -1,6 +1,5 @@
 import pytest
 import numpy as np
-import types
 
 from fastfem.elements import spectral_element
 

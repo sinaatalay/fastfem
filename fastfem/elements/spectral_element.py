@@ -1,5 +1,8 @@
 import numpy as np
 import fastfem.elements.element as element
+
+
+from numpy.typing import NDArray
 import typing
 
 
@@ -99,14 +102,27 @@ class SpectralElement2D(element.Element):
         self._lagrange_derivs = dict()
         self._lagrange_derivs[0] = self._lagrange_polys
 
-
     @typing.override
-    def basis_shape(self) -> tuple[int,...]:
+    def basis_shape(self) -> tuple[int, ...]:
         """Returns a tuple representing the shape of the array corresponding to the
         basis coefficients. A scalar field `f`, given as an array is expected to have
         shape `f.shape == element.basis_shape()`
         """
-        return (self.num_nodes,self.num_nodes)
+        return (self.num_nodes, self.num_nodes)
+
+    @typing.override
+    def reference_element_position_matrix(self) -> NDArray:
+        """
+        The position field of the reference (un-transformed) element. This is a vector
+        field.
+
+        Returns:
+            NDArray: An array of shape `(*element.basis_shape(), 2)`
+        """
+        out = np.empty((self.num_nodes, self.num_nodes, 2))
+        out[:, :, 0] = self.knots[:, np.newaxis]
+        out[:, :, 1] = self.knots[np.newaxis, :]
+        return out
 
     def lagrange_poly1D(self, deriv_order: int = 0) -> np.ndarray:
         """
@@ -135,9 +151,14 @@ class SpectralElement2D(element.Element):
         self._lagrange_derivs[deriv_order] = coefs
         return coefs
 
-    def interp_field(
-            self, field: np.ndarray, X: np.ndarray | float, Y: np.ndarray | float,
-            fieldshape: tuple[int,...] = tuple()) -> np.ndarray:
+    @typing.override
+    def interpolate_field(
+        self,
+        field: NDArray,
+        X: NDArray,
+        Y: NDArray,
+        fieldshape: tuple[int, ...] = tuple(),
+    ) -> NDArray:
         """Evaluates field at (X,Y) in reference coordinates.
         The result is an array of values `field(X,Y)`.
 
@@ -148,23 +169,23 @@ class SpectralElement2D(element.Element):
         X and Y must have compatible shape, broadcasting to pointshape.
 
         Args:
-            field (np.ndarray): an array of shape (degree+1,degree+1,*fieldshape)
+            field (NDArray): an array of shape (degree+1,degree+1,*fieldshape)
                 representing the field to be interpolated.
-            X (np.ndarray | float): x values (in reference coordinates).
-            Y (np.ndarray | float): y values (in reference coordinates).
+            X (NDArray): x values (in reference coordinates).
+            Y (NDArray): y values (in reference coordinates).
             fieldshape (tuple[int,...], optional): the shape of `field` at each point.
                 Defaults to tuple() for a scalar field.
 
         Returns:
-            np.ndarray: The interpolated values `field(X,Y)`
+            NDArray: The interpolated values `field(X,Y)`
         """
         if not isinstance(X, np.ndarray):
             X = np.array(X)
         if not isinstance(Y, np.ndarray):
             Y = np.array(Y)
         field_pad = (np.newaxis,) * len(fieldshape)
-        X = X[...,*field_pad]
-        Y = Y[...,*field_pad]
+        X = X[..., *field_pad]
+        Y = Y[..., *field_pad]
         # F^{i,j} L_{i,j}(X,Y)
         # lagrange_polys[i,k] : component c in term cx^k of poly i
         return np.einsum(
@@ -176,36 +197,7 @@ class SpectralElement2D(element.Element):
             np.expand_dims(Y, -1) ** np.arange(self.num_nodes),
         )
 
-    @typing.override
-    def reference_to_real(self, pos_matrix: np.ndarray,
-            X: np.ndarray | float,
-            Y: np.ndarray | float) -> np.ndarray:
-        """Maps the points (X,Y) from reference coordinates
-        to real positions. The result is an array of shape
-        `(*point_shape,2)`, where the last index is the dimension, and
-        `point_shape = np.broadcast_shapes(X.shape,Y.shape)`.
-
-        `pos_matrix` is an array of shape `(*basis_shape,...,2)`
-        for the element's expected shape `basis_shape`, which is obtained by
-        `element.basis_shape()`. The internal ellipses `...` map using numpy's rules
-        with point_shape.
-        pos_matrix[...,i] is the i^th coordinate of the position relevant to
-        the basis function indexed in (...).
-
-        Args:
-            pos_matrix (np.ndarray): an array representing the positions of the
-                    element nodes. This is of the shape `(*basis_shape,...,2)`.
-            X (np.ndarray | float): X coordinates of the points to map. The
-                    shape of X must be compatible with the shape of Y.
-            Y (np.ndarray | float): Y coordinates of the points to map. The
-                    shape of Y must be compatible with the shape of X.
-
-        Returns:
-            np.ndarray: An array of real coordinates that (X,Y) map to.
-        """
-        return self.interp_field(pos_matrix, X, Y,fieldshape=(2,))
-
-    #@warnings.deprecated("This can be done (probably cleaner) with JAX.")
+    # @warnings.deprecated("This can be done (probably cleaner) with JAX.")
     def locate_point(
         self,
         pos_matrix: np.ndarray,
@@ -214,10 +206,11 @@ class SpectralElement2D(element.Element):
         tol: float = 1e-8,
         dmin: float = 1e-7,
         max_iters: int = 1000,
-        def_grad_badness_tol: float =1e-4,
-        ignore_out_of_bounds: bool =False,
-        char_x: float|None = None,
-        char_y: float|None = None) -> tuple[np.ndarray,bool]:
+        def_grad_badness_tol: float = 1e-4,
+        ignore_out_of_bounds: bool = False,
+        char_x: float | None = None,
+        char_y: float | None = None,
+    ) -> tuple[np.ndarray, bool]:
         """
         Attempts to find the local coordinates corresponding to the
         given global coordinates (posx,posy). Returns (local_pt,success).
@@ -387,7 +380,7 @@ class SpectralElement2D(element.Element):
 
             # check badness
             defgrad_badness = np.abs(
-                np.linalg.det([dx_l2g, dy_l2g]) / (char_x * char_y) # type: ignore
+                np.linalg.det([dx_l2g, dy_l2g]) / (char_x * char_y)  # type: ignore
             )
             if defgrad_badness < def_grad_badness_tol:
                 raise DeformationGradient2DBadnessException(
@@ -503,11 +496,16 @@ class SpectralElement2D(element.Element):
             self.lagrange_poly1D(deriv_order)[lag_index, :],
             np.expand_dims(x, -1) ** np.arange(self.num_nodes - deriv_order),
         )
-
-    def field_grad(self, field: np.ndarray, X: np.ndarray | float,
-            Y: np.ndarray | float,
-            pos_matrix: np.ndarray | None = None,
-            fieldshape: tuple[int,...] = tuple()) -> np.ndarray:
+    
+    @typing.override
+    def interpolate_field_gradient(
+        self,
+        field: NDArray,
+        X: NDArray,
+        Y: NDArray,
+        pos_matrix: NDArray | None = None,
+        fieldshape: tuple[int, ...] = tuple(),
+    ) -> NDArray:
         """
         Calculates the gradient of a field f at the reference coordinates (X,Y).
         The result is an array of shape `(...,*fieldshape,2)`,
@@ -524,18 +522,18 @@ class SpectralElement2D(element.Element):
         pos_matrix can be kept None.
 
         Args:
-            field (np.ndarray): an array of shape (degree+1,degree+1,*fieldshape)
+            field (NDArray): an array of shape (degree+1,degree+1,*fieldshape)
                 representing the field to be interpolated.
-            X (np.ndarray | float): x values (in reference coordinates).
-            Y (np.ndarray | float): y values (in reference coordinates).
-            pos_matrix (np.ndarray | None, optional): If set, `pos_matrix` specifies
+            X (NDArray): x values (in reference coordinates).
+            Y (NDArray): y values (in reference coordinates).
+            pos_matrix (NDArray | None, optional): If set, `pos_matrix` specifies
                 the position fields of the element, and the gradient will be computed in
                 Cartesian coordinates. Defaults to None.
             fieldshape (tuple[int,...], optional): the shape of `field` pointwise.
                 Defaults to tuple(), representing a scalar field.
 
         Returns:
-            np.ndarray: an array representing the gradient of the field evaluated
+            NDArray: an array representing the gradient of the field evaluated
                 at each point.
         """
 
@@ -544,8 +542,8 @@ class SpectralElement2D(element.Element):
         if not isinstance(Y, np.ndarray):
             Y = np.array(Y)
         field_pad = (np.newaxis,) * len(fieldshape)
-        X = X[...,*field_pad]
-        Y = Y[...,*field_pad]
+        X = X[..., *field_pad]
+        Y = Y[..., *field_pad]
 
         x_deriv = np.einsum(
             "ij...,ia,...a,jb,...b->...",
@@ -567,43 +565,13 @@ class SpectralElement2D(element.Element):
 
         if pos_matrix is not None:
             # (*pointshape,*fieldshape,i,j): dX^i/dx_j
-            def_grad = self.def_grad(pos_matrix, X, Y)
+            def_grad = self.interpolate_deformation_gradient(pos_matrix, X, Y)
 
             # grad is (*pointshape,*fieldshape,j): dF/dx_j
             # so we need the inverse
             return np.einsum("...ji,...j->...i", np.linalg.inv(def_grad), grad)
 
         return grad
-
-    def def_grad(self, pos_matrix: np.ndarray, X: np.ndarray | float,
-            Y: np.ndarray | float) -> np.ndarray:
-        """Calculates the deformation gradient (often called the Jacobian matrix)
-        $\\frac{\\partial \\Phi}{\\partial x}$, where $\\Phi$ maps reference coordinates
-        to real coordinates.
-        This matrix is evaluated at the reference coordinates `(X,Y)`.
-        X and Y must be broadcastable to the same shape.
-        The result is an array with shape (...,2,2) where
-        the first new index specifies the coordinate in global space and the
-        second index specifies the coordinate in reference space.
-
-        `pos_matrix` is an array of shape (*basis_shape,...,2) where
-        `pos_matrix[i,j,...] = [x,y]` when `(x,y)` is the position of node i (along
-        the x-axis) and j (along the y-axis). The ellipses are broadcasted along with
-        `X` and `Y`.
-
-        Args:
-            pos_matrix (np.ndarray): an array representing the positions of the
-                    element nodes. This is of the shape `(*basis_shape,...,2)`.
-            X (np.ndarray | float): X coordinates of the points to map. The
-                    shape of X must be compatible with the shape of Y.
-            Y (np.ndarray | float): Y coordinates of the points to map. The
-                    shape of Y must be compatible with the shape of X.
-
-
-        Returns:
-            np.ndarray: the evaluated deformation gradient.
-        """
-        return self.field_grad(pos_matrix, X, Y, fieldshape=(2,))
 
     def _def_grad(self, pos_matrix, i, j):
         """Calculates the deformation gradient matrix dX/(dxi)
@@ -679,7 +647,7 @@ class SpectralElement2D(element.Element):
             # deformation gradient:
             # [dX/dxi1, dX/dxi2]
             # [dY/dxi1, dY/dxi2]
-            grad = self.def_grad(pos_matrix, i, j)[:, :, 0]  # collapse the dim for k
+            grad = self.interpolate_deformation_gradient(pos_matrix, i, j)[:, :, 0]  # collapse the dim for k
             # we need to get d\xi/dx
             gradinv = np.linalg.inv(grad.T)
             # [dxi1/dX, dxi1/dY] T   [dxi1/dX, dxi2/dX]
@@ -688,7 +656,6 @@ class SpectralElement2D(element.Element):
             # lagrangian is [dL/dxi1, dL/xi2]^T
             return (gradinv @ np.expand_dims(lagrangian.T, -1)).T[0]
         return lagrangian
-
 
     @typing.override
     def basis_mass_matrix(self, pos_matrix: np.ndarray) -> np.ndarray:
@@ -714,7 +681,7 @@ class SpectralElement2D(element.Element):
             * self.weights[np.newaxis, :]
             * np.abs(
                 np.linalg.det(
-                    self.def_grad(
+                    self.interpolate_deformation_gradient(
                         pos_matrix,
                         self.knots[:, np.newaxis],
                         self.knots[np.newaxis, :],
@@ -724,10 +691,13 @@ class SpectralElement2D(element.Element):
         )
         return w
 
-
     @typing.override
-    def basis_stiffness_matrix_times_field(self, pos_matrix: np.ndarray,
-            field: np.ndarray, fieldshape: tuple[int,...] = tuple()) -> np.ndarray:
+    def basis_stiffness_matrix_times_field(
+        self,
+        pos_matrix: np.ndarray,
+        field: np.ndarray,
+        fieldshape: tuple[int, ...] = tuple(),
+    ) -> np.ndarray:
         """Computes the vector $\\int (\\nabla \\phi_i) \\cdot \\nabla f ~ dV$ of the
         $H^1$ products on the element
         over the whole basis on the element. Using the multi-index 'I' for the
@@ -755,7 +725,7 @@ class SpectralElement2D(element.Element):
             * self.weights[np.newaxis, :]
             * np.abs(
                 np.linalg.det(
-                    self.def_grad(
+                    self.interpolate_deformation_gradient(
                         pos_matrix,
                         np.arange(self.num_nodes),
                         np.arange(self.num_nodes)[np.newaxis, :],
@@ -769,10 +739,11 @@ class SpectralElement2D(element.Element):
         )
         # [i,j,...,dim] partial_dim field(xi,xj)
 
-        grad_field_form = self.field_grad(field, self.knots[:, np.newaxis], self.knots,
-            fieldshape=fieldshape)
+        grad_field_form = self.interpolate_field_gradient(
+            field, self.knots[:, np.newaxis], self.knots, fieldshape=fieldshape
+        )
         def_grad_inv = np.linalg.inv(
-            self.def_grad(pos_matrix, self.knots[:, np.newaxis], self.knots)
+            self.interpolate_deformation_gradient(pos_matrix, self.knots[:, np.newaxis], self.knots)
         )
         grad_field_vec = np.einsum(
             "ijab,ijdb,ij...d->ij...a", def_grad_inv, def_grad_inv, grad_field_form
@@ -801,7 +772,7 @@ class SpectralElement2D(element.Element):
 
         return KF
 
-    #@warnings.deprecated("No support for vectorized elements; out of scope.")
+    # @warnings.deprecated("No support for vectorized elements; out of scope.")
     def basis_stiffness_matrix_diagonal(self, pos_matrix: np.ndarray) -> np.ndarray:
         """
         Computes the diagonal of the stiffness matrix
@@ -819,7 +790,7 @@ class SpectralElement2D(element.Element):
             * self.weights[np.newaxis, :]
             * np.abs(
                 np.linalg.det(
-                    self.def_grad(
+                    self.interpolate_deformation_gradient(
                         pos_matrix,
                         np.arange(self.num_nodes),
                         np.arange(self.num_nodes)[np.newaxis, :],
@@ -835,7 +806,7 @@ class SpectralElement2D(element.Element):
         lag_div2 = lag_div**2
 
         def_grad_inv = np.linalg.inv(
-            self.def_grad(pos_matrix, self.knots[:, np.newaxis], self.knots)
+            self.interpolate_deformation_gradient(pos_matrix, self.knots[:, np.newaxis], self.knots)
         )
         # to compute, join gradients with a,d and sum along i,j
         inner_prod = np.einsum("ijab,ijdb,ij->ijad", def_grad_inv, def_grad_inv, w)
@@ -860,7 +831,7 @@ class SpectralElement2D(element.Element):
         # but this is just [a] * delta_{b,j}, so we only need [a]:
         edge_inds = self._get_edge_inds(edge_index)
         pos_bdry = pos_matrix[edge_inds[:, 0], edge_inds[:, 1], :]
-        def_grad = self.def_grad(pos_matrix, pos_bdry[:, 0], pos_bdry[:, 1])
+        def_grad = self.interpolate_deformation_gradient(pos_matrix, pos_bdry[:, 0], pos_bdry[:, 1])
         inv_scale = np.linalg.norm(
             def_grad[:, :, (edge_index + 1) % 2], axis=-1
         ) * np.abs(np.linalg.det(def_grad))
