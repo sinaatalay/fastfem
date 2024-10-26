@@ -65,7 +65,9 @@ def run_demo(
             coords[i, j, :, :, 1] = cell_height * (
                 j + (elem.knots[np.newaxis, :] + 1) / 2
             )
-            MASS_MAT[global_indices[i, j]] += elem.basis_mass_matrix(coords[i, j])
+            MASS_MAT[global_indices[i, j]] += elem.mass_matrix(coords[i, j],
+                np.unravel_index(np.arange((elem_order+1)**2),(elem_order+1,elem_order+1)),
+                np.unravel_index(np.arange((elem_order+1)**2),(elem_order+1,elem_order+1)))
             U[global_indices[i, j]] = init_cond_U(
                 coords[i, j, :, :, 0], coords[i, j, :, :, 1]
             )
@@ -79,7 +81,7 @@ def run_demo(
         UDDOT[:] = 0
         for i in range(nelem_x):
             for j in range(nelem_y):
-                UDDOT[global_indices[i, j]] -= elem.basis_stiffness_matrix_times_field(
+                UDDOT[global_indices[i, j]] -= elem.integrate_grad_basis_dot_grad_field(
                     coords[i, j], U[global_indices[i, j]]
                 )
         UDDOT[:-1] /= MASS_MAT[:-1]

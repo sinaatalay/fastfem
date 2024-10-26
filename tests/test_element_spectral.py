@@ -262,7 +262,7 @@ def test_def_grad_eval(transformed_element, ref_coords_arr):
     X = X.squeeze(-1)
     Y = Y.squeeze(-1)
 
-    grads = elem.def_grad(points, X, Y)
+    grads = elem.interpolate_deformation_gradient(points, X, Y)
 
     sigfigs = 5
     # we will use central finite difference which has O(h^2) error
@@ -363,15 +363,17 @@ def test_field_grad(transformed_element):
         np.arange(elem.num_nodes**2) // elem.num_nodes,
     )
     field[enumeration[0], enumeration[1], enumeration[0], enumeration[1]] = 1
-    grads = elem.field_grad(field, X, Y, fieldshape=fieldshape)
-    cartgrads = elem.field_grad(field, X, Y, pos_matrix=points, fieldshape=fieldshape)
+    grads = elem.interpolate_field_gradient(field, X, Y, fieldshape=fieldshape)
+    cartgrads = elem.interpolate_field_gradient(
+        field, X, Y, pos_matrix=points, fieldshape=fieldshape
+    )
     x_derivs = (
-        elem.interp_field(field, X + h, Y, fieldshape=fieldshape)
-        - elem.interp_field(field, X - h, Y, fieldshape=fieldshape)
+        elem.interpolate_field(field, X + h, Y, fieldshape=fieldshape)
+        - elem.interpolate_field(field, X - h, Y, fieldshape=fieldshape)
     ) / (2 * h)
     y_derivs = (
-        elem.interp_field(field, X, Y + h, fieldshape=fieldshape)
-        - elem.interp_field(field, X, Y - h, fieldshape=fieldshape)
+        elem.interpolate_field(field, X, Y + h, fieldshape=fieldshape)
+        - elem.interpolate_field(field, X, Y - h, fieldshape=fieldshape)
     ) / (2 * h)
     grads_comp = np.stack((x_derivs, y_derivs), -1)
     np.testing.assert_almost_equal(
@@ -381,7 +383,7 @@ def test_field_grad(transformed_element):
         err_msg="Local-coordinate gradient disagreement",
     )
 
-    def_grad = elem.def_grad(points, X, Y)
+    def_grad = elem.interpolate_deformation_gradient(points, X, Y)
     grads_cart_to_lag = np.einsum("...ij,...i->...j", def_grad, cartgrads)
     np.testing.assert_almost_equal(
         grads_cart_to_lag,
@@ -391,7 +393,7 @@ def test_field_grad(transformed_element):
 
     # values are correct, now test shaped accessing: first, single values
     np.testing.assert_almost_equal(
-        elem.field_grad(field, X[0, 0], Y[0, 0], fieldshape=fieldshape),
+        elem.interpolate_field_gradient(field, X[0, 0], Y[0, 0], fieldshape=fieldshape),
         grads[0, 0, ...],
         err_msg="Shape-invariance test: Single floats fail",
     )
@@ -403,7 +405,7 @@ def test_field_grad(transformed_element):
         accessor_b = (np.arange(np.prod(b) * 2) % elem.num_nodes).reshape((2,) + b)
         Xa = X[*accessor_a]
         Yb = Y[*accessor_b]
-        res = elem.field_grad(field, Xa, Yb, fieldshape=fieldshape)
+        res = elem.interpolate_field_gradient(field, Xa, Yb, fieldshape=fieldshape)
         Xc = Xa + 0 * Yb
         Yc = Yb + 0 * Xa
         it = np.nditer(Xc, flags=["multi_index"])
@@ -411,7 +413,9 @@ def test_field_grad(transformed_element):
             ind = it.multi_index
             np.testing.assert_almost_equal(
                 res[*ind, ...],
-                elem.field_grad(field, x, Yc[ind], fieldshape=fieldshape),
+                elem.interpolate_field_gradient(
+                    field, x, Yc[ind], fieldshape=fieldshape
+                ),
                 err_msg=f"Shape-invariance test: pair {a}-{b} (broadcast to {c}) fails",
             )
 
@@ -461,14 +465,20 @@ def meshquad(X, Y, F):
 
 def test_mass_matrix(transformed_element):
     elem, points, transformation = transformed_element
-    mass = elem.basis_mass_matrix(points)
+    mshape = (elem.num_nodes, elem.num_nodes)
+    msize = elem.num_nodes**2
+    mass = elem.mass_matrix(
+        points,
+        np.unravel_index(np.arange(msize).reshape(mshape), mshape)
+        + np.unravel_index(np.arange(msize).reshape(mshape), mshape),
+    )
 
     knots = elem.knots
     weights = elem.weights
 
-    assert mass.shape == (elem.num_nodes, elem.num_nodes)
+    assert mass.shape == mshape
 
-    def_grad = elem.def_grad(points, knots[:, np.newaxis], knots[np.newaxis, :])
+    def_grad = elem.interpolate_deformation_gradient(points, knots[:, np.newaxis], knots[np.newaxis, :])
     jac = np.abs(np.linalg.det(def_grad))
     for i in range(elem.num_nodes):
         for j in range(elem.num_nodes):
@@ -483,7 +493,7 @@ def test_stiffness_matrix(transformed_element):
         * elem.weights[np.newaxis, :]
         * np.abs(
             np.linalg.det(
-                elem.def_grad(
+                elem.interpolate_deformation_gradient(
                     points,
                     np.arange(elem.num_nodes),
                     np.arange(elem.num_nodes)[np.newaxis, :],
@@ -504,7 +514,7 @@ def test_stiffness_matrix(transformed_element):
     field[enumeration[0], enumeration[1], enumeration[0], enumeration[1]] = 1
 
     # [i,j, m,n, dim] partial_dim phi_{mn}(xi,xj)
-    field_grad = elem.field_grad(
+    field_grad = elem.interpolate_field_gradient(
         field,
         elem.knots[:, np.newaxis],
         elem.knots[np.newaxis, :],
@@ -516,12 +526,12 @@ def test_stiffness_matrix(transformed_element):
     stiff = np.einsum("ij,ijmnd,ijabd->mnab", w, field_grad, field_grad)
 
     np.testing.assert_almost_equal(
-        elem.basis_stiffness_matrix_times_field(points, field, fieldshape=fieldshape),
+        elem.integrate_grad_basis_dot_grad_field(points, field, fieldshape=fieldshape),
         stiff,
     )
 
     np.testing.assert_almost_equal(
-        elem.basis_stiffness_matrix_diagonal(points), np.einsum("mnmn->mn", stiff)
+        elem.integrate_grad_basis_dot_grad_field(points), np.einsum("mnmn->mn", stiff)
     )
 
 

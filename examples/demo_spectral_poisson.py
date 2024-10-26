@@ -83,7 +83,7 @@ def run_demo(
 
         for i in range(nelem_x):
             for j in range(nelem_y):
-                STEP[global_indices[i, j]] -= elem.basis_stiffness_matrix_times_field(
+                STEP[global_indices[i, j]] -= elem.integrate_grad_basis_dot_grad_field(
                     coords[i, j], U[global_indices[i, j]]
                 )
                 DIAG[global_indices[i, j]] += elem.basis_stiffness_matrix_diagonal(

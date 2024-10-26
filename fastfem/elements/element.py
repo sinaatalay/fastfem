@@ -4,7 +4,8 @@ import numpy as np
 
 import warnings
 import collections.abc as colltypes
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
+import typing
 
 
 class Element(abc.ABC):
@@ -84,11 +85,11 @@ class Element(abc.ABC):
     @abc.abstractmethod
     def interpolate_field(
         self,
-        field: NDArray,
-        X: NDArray,
-        Y: NDArray,
+        field: ArrayLike,
+        X: ArrayLike,
+        Y: ArrayLike,
         fieldshape: tuple[int, ...] = tuple(),
-    ) -> NDArray:
+    ) -> typing.Any:
         """Evaluates field at (X,Y) in reference coordinates.
         The result is an array of values `field(X,Y)`.
 
@@ -99,19 +100,19 @@ class Element(abc.ABC):
         X and Y must have compatible shape, broadcasting to pointshape.
 
         Args:
-            field (NDArray): an array of shape (degree+1,degree+1,*fieldshape)
+            field (ArrayLike): an array of shape (degree+1,degree+1,*fieldshape)
                 representing the field to be interpolated.
-            X (NDArray): x values (in reference coordinates).
-            Y (NDArray): y values (in reference coordinates).
+            X (ArrayLike): x values (in reference coordinates).
+            Y (ArrayLike): y values (in reference coordinates).
             fieldshape (tuple[int,...], optional): the shape of `field` at each point.
                 Defaults to tuple() for a scalar field.
 
         Returns:
-            NDArray: The interpolated values `field(X,Y)`
+            typing.Any: The interpolated values `field(X,Y)`
         """
         pass
 
-    def reference_to_real(self, pos_matrix: NDArray, X: NDArray, Y: NDArray) -> NDArray:
+    def reference_to_real(self, pos_matrix: ArrayLike, X: ArrayLike, Y: ArrayLike) -> NDArray:
         """Maps the points (X,Y) from reference coordinates
         to real positions. The result is an array of shape
         `(*point_shape,2)`, where the last index is the dimension, and
@@ -125,11 +126,11 @@ class Element(abc.ABC):
         the basis function indexed in (...).
 
         Args:
-            pos_matrix (NDArray): an array representing the positions of the
+            pos_matrix (ArrayLike): an array representing the positions of the
                     element nodes. This is of the shape `(*basis_shape,...,2)`.
-            X (NDArray): X coordinates of the points to map. The
+            X (ArrayLike): X coordinates of the points to map. The
                     shape of X must be compatible with the shape of Y.
-            Y (NDArray): Y coordinates of the points to map. The
+            Y (ArrayLike): Y coordinates of the points to map. The
                     shape of Y must be compatible with the shape of X.
 
         Returns:
@@ -140,8 +141,8 @@ class Element(abc.ABC):
     @abc.abstractmethod
     def compute_field_gradient(
         self,
-        field: NDArray,
-        pos_matrix: NDArray | None = None,
+        field: ArrayLike,
+        pos_matrix: ArrayLike | None = None,
         fieldshape: tuple[int, ...] = tuple(),
     ) -> NDArray:
         """
@@ -158,9 +159,9 @@ class Element(abc.ABC):
         pos_matrix can be kept None.
 
         Args:
-            field (NDArray): an array of shape (*basis_shape,...,*fieldshape)
+            field (ArrayLike): an array of shape (*basis_shape,...,*fieldshape)
                 representing the field to be interpolated.
-            pos_matrix (NDArray | None, optional): If set, `pos_matrix` specifies
+            pos_matrix (ArrayLike | None, optional): If set, `pos_matrix` specifies
                 the position fields of the element, and the gradient will be computed in
                 Cartesian coordinates. This method supports element-stacking.
                 Defaults to None.
@@ -175,10 +176,10 @@ class Element(abc.ABC):
 
     def interpolate_field_gradient(
         self,
-        field: NDArray,
-        X: NDArray,
-        Y: NDArray,
-        pos_matrix: NDArray | None = None,
+        field: ArrayLike,
+        X: ArrayLike,
+        Y: ArrayLike,
+        pos_matrix: ArrayLike | None = None,
         fieldshape: tuple[int, ...] = tuple(),
     ) -> NDArray:
         """
@@ -197,11 +198,11 @@ class Element(abc.ABC):
         pos_matrix can be kept None.
 
         Args:
-            field (NDArray): an array of shape (*basis_shape,*fieldshape)
+            field (ArrayLike): an array of shape (*basis_shape,*fieldshape)
                 representing the field to be interpolated.
-            X (NDArray): x values (in reference coordinates).
-            Y (NDArray): y values (in reference coordinates).
-            pos_matrix (NDArray | None, optional): If set, `pos_matrix` specifies
+            X (ArrayLike): x values (in reference coordinates).
+            Y (ArrayLike): y values (in reference coordinates).
+            pos_matrix (ArrayLike | None, optional): If set, `pos_matrix` specifies
                 the position fields of the element, and the gradient will be computed in
                 Cartesian coordinates. Defaults to None.
             fieldshape (tuple[int,...], optional): the shape of `field` pointwise.
@@ -224,7 +225,7 @@ class Element(abc.ABC):
 
     def compute_deformation_gradient(
         self,
-        pos_matrix: NDArray,
+        pos_matrix: ArrayLike,
     ) -> NDArray:
         """
         Calculates the deformation gradient (often called the Jacobian matrix)
@@ -239,17 +240,17 @@ class Element(abc.ABC):
 
 
         Args:
-            pos_matrix (NDArray): an array representing the positions of the
+            pos_matrix (ArrayLike): an array representing the positions of the
                     element nodes. This is of the shape `(*basis_shape,...,2)`.
 
 
         Returns:
-            np.ndarray: the computed deformation gradient.
+            NDArray: the computed deformation gradient.
         """
         return self.compute_field_gradient(pos_matrix, fieldshape=(2,))
 
     def interpolate_deformation_gradient(
-        self, pos_matrix: NDArray, X: NDArray, Y: NDArray
+        self, pos_matrix: ArrayLike, X: ArrayLike, Y: ArrayLike
     ) -> NDArray:
         """Calculates the deformation gradient (often called the Jacobian matrix)
         $\\frac{\\partial \\Phi}{\\partial x}$, where $\\Phi$ maps reference coordinates
@@ -266,26 +267,26 @@ class Element(abc.ABC):
         `X` and `Y`.
 
         Args:
-            pos_matrix (NDArray): an array representing the positions of the
+            pos_matrix (ArrayLike): an array representing the positions of the
                     element nodes. This is of the shape `(*basis_shape,...,2)`.
-            X (NDArray): X coordinates of the points to map. The
+            X (ArrayLike): X coordinates of the points to map. The
                     shape of X must be compatible with the shape of Y.
-            Y (NDArray): Y coordinates of the points to map. The
+            Y (ArrayLike): Y coordinates of the points to map. The
                     shape of Y must be compatible with the shape of X.
 
 
         Returns:
-            np.ndarray: the evaluated deformation gradient.
+            NDArray: the evaluated deformation gradient.
         """
         return self.interpolate_field_gradient(pos_matrix, X, Y, fieldshape=(2,))
 
     @abc.abstractmethod
     def integrate_field(
         self,
-        pos_matrix: NDArray,
-        field: NDArray,
+        pos_matrix: ArrayLike,
+        field: ArrayLike,
         fieldshape: tuple[int, ...] = tuple(),
-        jacobian_scale: NDArray | None = None,
+        jacobian_scale: ArrayLike = 1,
     ) -> NDArray:
         """
         Integrates `field` $f$ over the element. The result is the value of
@@ -293,15 +294,15 @@ class Element(abc.ABC):
         `(...,*field_shape)`.
 
         Args:
-            pos_matrix (NDArray): an array representing the positions of the
+            pos_matrix (ArrayLike): an array representing the positions of the
                     element nodes. This is of the shape `(basis_shape,...,2)`
-            field (NDArray): an array of shape (*basis_shape,...,*fieldshape)
+            field (ArrayLike): an array of shape (*basis_shape,...,*fieldshape)
                 representing the field to be interpolated.
             fieldshape (tuple[int,...], optional): the shape of `field` pointwise.
                 Defaults to tuple(), representing a scalar field.
-            jacobian_scale (NDArray | None, optional): an array of shape
+            jacobian_scale (ArrayLike, optional): an array of shape
                 `(*basis_shape,...)` representing the scalar factor $\\alpha$.
-                Defaults to None.
+                Defaults to 1.
 
         Returns:
             NDArray: The resultant integral, an array of shape `(...,*fieldshape)`.
@@ -311,11 +312,11 @@ class Element(abc.ABC):
     @abc.abstractmethod
     def integrate_basis_times_field(
         self,
-        pos_matrix: NDArray,
-        field: NDArray,
+        pos_matrix: ArrayLike,
+        field: ArrayLike,
         fieldshape: tuple[int, ...] = tuple(),
-        indices: colltypes.Sequence[NDArray] | None = None,
-        jacobian_scale: NDArray | None = None,
+        indices: colltypes.Sequence[ArrayLike] | None = None,
+        jacobian_scale: ArrayLike = 1,
     ) -> NDArray:
         """
         Computes the integral $\\int \\alpha \\phi_i f ~ dV$
@@ -324,18 +325,18 @@ class Element(abc.ABC):
         as the identity.
 
         Args:
-            pos_matrix (NDArray): an array representing the positions of the
+            pos_matrix (ArrayLike): an array representing the positions of the
                     element nodes. This is of the shape `(basis_shape,...,2)`
-            field (NDArray): an array of shape `(*basis_shape,...,*fieldshape)`
+            field (ArrayLike): an array of shape `(*basis_shape,...,*fieldshape)`
                 representing the field to be interpolated.
             fieldshape (tuple[int,...], optional): the shape of `field` pointwise.
                 Defaults to tuple(), representing a scalar field.
-            indices (colltypes.Sequence[NDArray] | None, optional): Indices of the basis
+            indices (colltypes.Sequence[ArrayLike] | None, optional): Indices of the basis
                     functions to integrate against, or None if the integral should be
                     computed against every basis field. Defaults to None.
-            jacobian_scale (NDArray | None, optional): an array of shape
+            jacobian_scale (ArrayLike, optional): an array of shape
                 `(*basis_shape,...)` representing the scalar factor $\\alpha$.
-                Defaults to None.
+                Defaults to 1.
 
         Returns:
             NDArray: The resultant integral, an array of shape
@@ -346,9 +347,9 @@ class Element(abc.ABC):
 
     def mass_matrix(
         self,
-        pos_matrix: NDArray,
-        indices: colltypes.Sequence[NDArray] | None = None,
-        jacobian_scale: NDArray | None = None,
+        pos_matrix: ArrayLike,
+        indices: colltypes.Sequence[np.ndarray] | None = None,
+        jacobian_scale: ArrayLike = 1,
     ) -> NDArray:
         """
         Recovers the mass matrix entries $\\int \\alpha \\phi_i \\phi_j ~ dV$
@@ -365,14 +366,14 @@ class Element(abc.ABC):
         `basis_mass_matrix(pos_matrix,indices)`.
 
         Args:
-            pos_matrix (NDArray): an array representing the positions of the
+            pos_matrix (ArrayLike): an array representing the positions of the
                     element nodes. This is of the shape `(basis_shape,...,2)`
-            indices (colltypes.Sequence[NDArray] | None, optional): Indices of the mass
+            indices (colltypes.Sequence[ArrayLike] | None, optional): Indices of the mass
                     matrix to access, or None if the whole matrix should be returned.
                     Defaults to None.
-            jacobian_scale (NDArray | None, optional): an array of shape
+            jacobian_scale (ArrayLike, optional): an array of shape
                 `(*basis_shape,...)` representing the scalar factor $\\alpha$.
-                Defaults to None.
+                Defaults to 1.
 
         Returns:
             NDArray: an array representing the mass matrix, or portions thereof.
@@ -394,11 +395,12 @@ class Element(abc.ABC):
     @abc.abstractmethod
     def integrate_grad_basis_dot_field(
         self,
-        pos_matrix: NDArray,
-        field: NDArray,
+        pos_matrix: ArrayLike,
+        field: ArrayLike,
+        is_field_upper_index: bool,
         fieldshape: tuple[int, ...],
-        indices: colltypes.Sequence[NDArray] | None = None,
-        jacobian_scale: NDArray | None = None,
+        indices: colltypes.Sequence[ArrayLike] | None = None,
+        jacobian_scale: ArrayLike = 1,
     ) -> NDArray:
         """
         Computes the integral $\\int \\alpha \\nabla \\phi_i \\cdot f ~ dV$
@@ -406,18 +408,21 @@ class Element(abc.ABC):
         `field`, which must have size equal to the domain dimension.
 
         Args:
-            pos_matrix (NDArray): an array representing the positions of the
+            pos_matrix (ArrayLike): an array representing the positions of the
                     element nodes. This is of the shape `(basis_shape,...,2)`
-            field (NDArray): an array of shape (*basis_shape,...,*fieldshape)
+            field (ArrayLike): an array of shape (*basis_shape,...,*fieldshape)
                 representing the field to be interpolated.
+            is_field_upper_index (bool): True if the last axis of field is treated as
+                an upper (contravariant / vector) index. False if it is a lower
+                (covariant / covector) index.
             fieldshape (tuple[int,...], optional): the shape of `field` pointwise.
                 Defaults to tuple(), representing a scalar field.
-            indices (colltypes.Sequence[NDArray] | None, optional): Indices of the basis
+            indices (colltypes.Sequence[ArrayLike] | None, optional): Indices of the basis
                     functions to integrate against, or None if the integral should be
                     computed against every basis field. Defaults to None.
-            jacobian_scale (NDArray | None, optional): an array of shape
+            jacobian_scale (ArrayLike, optional): an array of shape
                 `(*basis_shape,...)` representing the scalar factor $\\alpha$.
-                Defaults to None.
+                Defaults to 1.
 
         Returns:
             NDArray: The resultant integral, an array of shape
@@ -428,28 +433,28 @@ class Element(abc.ABC):
 
     def integrate_grad_basis_dot_grad_field(
         self,
-        pos_matrix: NDArray,
-        field: NDArray,
+        pos_matrix: ArrayLike,
+        field: ArrayLike,
         fieldshape: tuple[int, ...] = tuple(),
-        indices: colltypes.Sequence[NDArray] | None = None,
-        jacobian_scale: NDArray | None = None,
+        indices: colltypes.Sequence[ArrayLike] | None = None,
+        jacobian_scale: ArrayLike = 1,
     ) -> NDArray:
         """
         Computes the integral $\\int \\alpha \\nabla \\phi_i \\cdot \\nabla f ~ dV$
         for a field $f$, on this element. The dot product is over the gradients.
 
         Args:
-            pos_matrix (NDArray): an array representing the positions of the
+            pos_matrix (ArrayLike): an array representing the positions of the
                     element nodes. This is of the shape `(basis_shape,...,2)`
-            field (NDArray): an array of shape (*basis_shape,...,*fieldshape)
+            field (ArrayLike): an array of shape (*basis_shape,...,*fieldshape)
                 representing the field to be interpolated.
             fieldshape (tuple[int,...]): the shape of `field` pointwise.
-            indices (colltypes.Sequence[NDArray] | None, optional): Indices of the basis
+            indices (colltypes.Sequence[ArrayLike] | None, optional): Indices of the basis
                     functions to integrate against, or None if the integral should be
                     computed against every basis field. Defaults to None.
-            jacobian_scale (NDArray | None, optional): an array of shape
+            jacobian_scale (ArrayLike, optional): an array of shape
                 `(*basis_shape,...)` representing the scalar factor $\\alpha$.
-                Defaults to None.
+                Defaults to 1.
 
         Returns:
             NDArray: The resultant integral, an array of shape
@@ -460,9 +465,10 @@ class Element(abc.ABC):
             "Element.integrate_grad_basis_dot_grad_field() called, "
             + "which delegates to integrate_grad_basis_dot_field()"
         )
-        return self.integrate_basis_times_field(
+        return self.integrate_grad_basis_dot_field(
             pos_matrix,
             self.compute_field_gradient(field, pos_matrix, fieldshape),
+            False,
             fieldshape + (2,),
             indices,
             jacobian_scale
