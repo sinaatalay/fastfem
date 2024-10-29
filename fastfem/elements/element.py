@@ -8,7 +8,7 @@ from numpy.typing import ArrayLike, NDArray
 import typing
 
 
-class Element(abc.ABC):
+class Element2D(abc.ABC):
     """
     Handles the management of element operations. Element classes define operations
     to compute integrals on them. The elements themselves are handled in a data-driven
@@ -72,6 +72,15 @@ class Element(abc.ABC):
         return field
 
     @abc.abstractmethod
+    def boundary_count(self) -> int:
+        """The number of boundaries that correspond to this element.
+
+        Returns:
+            int: the number of boundaries to the element
+        """
+        pass
+
+    @abc.abstractmethod
     def reference_element_position_matrix(self) -> NDArray:
         """
         The position field of the reference (un-transformed) element. This is a vector
@@ -112,7 +121,9 @@ class Element(abc.ABC):
         """
         pass
 
-    def reference_to_real(self, pos_matrix: ArrayLike, X: ArrayLike, Y: ArrayLike) -> NDArray:
+    def reference_to_real(
+        self, pos_matrix: ArrayLike, X: ArrayLike, Y: ArrayLike
+    ) -> NDArray:
         """Maps the points (X,Y) from reference coordinates
         to real positions. The result is an array of shape
         `(*point_shape,2)`, where the last index is the dimension, and
@@ -388,7 +399,7 @@ class Element(abc.ABC):
             self.basis_fields(),
             self.basis_shape(),
             None if indices is None else indices[: len(self.basis_shape())],
-            jacobian_scale
+            jacobian_scale,
         )
         return mat if indices is None else mat[*indices]
 
@@ -471,7 +482,7 @@ class Element(abc.ABC):
             False,
             fieldshape + (2,),
             indices,
-            jacobian_scale
+            jacobian_scale,
         )
 
     # TODO boundary integrals,

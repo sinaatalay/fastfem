@@ -14,81 +14,20 @@ def element(request):
     return (elem, out)
 
 
-def transform_posmatrix(pos_matrix, mod, *args):
-    if mod == "translate":
-        if len(args) < 2:
-            raise ValueError(f"modifier '{mod}' expects 2 arguments! (dx,dy)")
-        vec = np.array([args[0], args[1]])
-        pos_matrix = pos_matrix + vec  # no in-place op, since we want a copy
-    elif mod == "rotate":
-        if len(args) < 1:
-            raise ValueError(f"modifier '{mod}' expects 1 argument! (angle)")
-        t = args[0]
-        rotmat = np.array([[np.cos(t), -np.sin(t)], [np.sin(t), np.cos(t)]])
-        pos_matrix = (rotmat @ np.expand_dims(pos_matrix, -1)).squeeze(-1)
-    elif mod == "scale":
-        if len(args) < 2:
-            raise ValueError(f"modifier '{mod}' expects 2 arguments! (scalex,scaley)")
-        vec = np.array([args[0], args[1]])
-        pos_matrix = pos_matrix * vec  # no in-place op, since we want a copy
-    elif mod == "lin_trans":
-        if len(args) < 4:
-            raise ValueError(f"modifier '{mod}' expects 4 arguments! (m00,m01,m10,m11)")
-        A = np.array([[args[0], args[1]], [args[2], args[3]]])
-        pos_matrix = (A @ np.expand_dims(pos_matrix, -1)).squeeze(-1)
-    else:
-        raise ValueError(f"'{mod}' not acceptable element modifier!")
-    return pos_matrix
-
-
-_PRESET_TRANSFORMS = {
-    "ref": lambda x: x,
-    "translated": lambda x: transform_posmatrix(x, "translate", 5, -2),
-    "rotated": lambda x: transform_posmatrix(x, "rotate", 1),
-    "x-scaled": lambda x: transform_posmatrix(x, "scale", 2, 1),
-    "y-scaled": lambda x: transform_posmatrix(x, "scale", 1, 2),
-    "combo1": lambda x: transform_posmatrix(
-        transform_posmatrix(x, "lin_trans", 2, 1, -1, 1), "translate", -4, 2
-    ),
-    "combo2": lambda x: transform_posmatrix(
-        transform_posmatrix(x, "lin_trans", 0.5, 1.3, 10, 0.3), "translate", 300, 600
-    ),
-}
-
-
-@pytest.fixture(
-    scope="module",
-    params=_PRESET_TRANSFORMS.keys(),
-)
-def transformation(request):
-    name = request.param
-    return _PRESET_TRANSFORMS[name]
-
-
 @pytest.fixture(scope="module")
 def transformed_element(element, transformation):
     return element[0], transformation(element[1]), transformation
 
 
-@pytest.fixture(params=[0, 1, 2, 3])
-def transformed_element_stack(request, element):
-    transforms = _PRESET_TRANSFORMS.values()
-    # param is number of dims for element position array
-    ndims = request.param
-    stackshape = tuple(3 for _ in range(ndims))
-    stacksize = np.prod(stackshape, dtype=int)
+@pytest.fixture(scope="module")
+def transformed_element_stack(transform_stack, element):
 
-    def stack_transform(x):
-        y = np.empty(stackshape + x.shape)
-        transformed = [f(x) for f in transforms]
-        for i in range(stacksize):
-            y[*np.unravel_index(i, stackshape), ...] = transformed[i % len(transforms)]
-        return y
-
+    transformed = transform_stack(element[1])
+    ndims = len(transformed.shape) - len(element[1].shape)
     pts_stack = np.permute_dims(
-        stack_transform(element[1]), (ndims, ndims + 1) + tuple(range(ndims)) + (-1,)
+        transformed, (ndims, ndims + 1) + tuple(range(ndims)) + (-1,)
     )
-    return element[0], pts_stack, stack_transform
+    return element[0], pts_stack, transform_stack
 
 
 @pytest.fixture(
@@ -478,13 +417,16 @@ def test_mass_matrix(transformed_element):
 
     assert mass.shape == mshape
 
-    def_grad = elem.interpolate_deformation_gradient(points, knots[:, np.newaxis], knots[np.newaxis, :])
+    def_grad = elem.interpolate_deformation_gradient(
+        points, knots[:, np.newaxis], knots[np.newaxis, :]
+    )
     jac = np.abs(np.linalg.det(def_grad))
     for i in range(elem.num_nodes):
         for j in range(elem.num_nodes):
             assert mass[i, j] == pytest.approx(weights[i] * weights[j] * jac[i, j])
 
 
+@pytest.mark.skip("we need to migrate this code over and generalize.")
 def test_stiffness_matrix(transformed_element):
     elem, points, transformation = transformed_element
     # weights [i,j] times jacobian

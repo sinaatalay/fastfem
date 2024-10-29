@@ -90,7 +90,7 @@ def _build_GLL(n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return x, endpoints_integ[:, 1] - endpoints_integ[:, 0], L
 
 
-class SpectralElement2D(element.Element):
+class SpectralElement2D(element.Element2D):
     """A spectral element in 2 dimensions of order N, leading to (N+1)^2 nodes.
     GLL quadrature is used to diagonalize the mass matrix.
     """
@@ -128,6 +128,15 @@ class SpectralElement2D(element.Element):
         out[:, :, 0] = self.knots[:, np.newaxis]
         out[:, :, 1] = self.knots[np.newaxis, :]
         return out
+
+    @typing.override
+    def boundary_count(self) -> int:
+        """The number of boundaries that correspond to this element.
+
+        Returns:
+            int: the number of boundaries to the element
+        """
+        return 4
 
     def lagrange_poly1D(self, deriv_order: int = 0) -> NDArray:
         """
@@ -673,7 +682,7 @@ class SpectralElement2D(element.Element):
             if not isinstance(pos_matrix, np.ndarray):
                 pos_matrix = np.array(pos_matrix)
             def_grad = self.interpolate_deformation_gradient(
-                pos_matrix[..., *field_pad,:], X, Y
+                pos_matrix[..., *field_pad, :], X, Y
             )
             # grad is (*pointshape,*fieldshape,j): dF/dx_j
             # so we need the inverse
@@ -710,8 +719,10 @@ class SpectralElement2D(element.Element):
         """
         if not isinstance(jacobian_scale, np.ndarray):
             jacobian_scale = np.array(jacobian_scale)
-        if len(jacobian_scale.shape) < 2 or any(jacobian_scale.shape[:2] != self.num_nodes):
-            jacobian_scale = jacobian_scale[np.newaxis,np.newaxis,...]
+        if len(jacobian_scale.shape) < 2 or any(
+            jacobian_scale.shape[:2] != self.num_nodes
+        ):
+            jacobian_scale = jacobian_scale[np.newaxis, np.newaxis, ...]
         if not isinstance(field, np.ndarray):
             field = np.array(field)
         field_pad = (np.newaxis,) * len(fieldshape)
@@ -760,8 +771,10 @@ class SpectralElement2D(element.Element):
         """
         if not isinstance(jacobian_scale, np.ndarray):
             jacobian_scale = np.array(jacobian_scale)
-        if len(jacobian_scale.shape) < 2 or any(jacobian_scale.shape[:2] != self.num_nodes):
-            jacobian_scale = jacobian_scale[np.newaxis,np.newaxis,...]
+        if len(jacobian_scale.shape) < 2 or any(
+            jacobian_scale.shape[:2] != self.num_nodes
+        ):
+            jacobian_scale = jacobian_scale[np.newaxis, np.newaxis, ...]
         if not isinstance(field, np.ndarray):
             field = np.array(field)
         field_pad = (np.newaxis,) * len(fieldshape)
@@ -817,8 +830,10 @@ class SpectralElement2D(element.Element):
         # weights [i,j] times jacobian
         if not isinstance(jacobian_scale, np.ndarray):
             jacobian_scale = np.array(jacobian_scale)
-        if len(jacobian_scale.shape) < 2 or any(jacobian_scale.shape[:2] != self.num_nodes):
-            jacobian_scale = jacobian_scale[np.newaxis,np.newaxis,...]
+        if len(jacobian_scale.shape) < 2 or any(
+            jacobian_scale.shape[:2] != self.num_nodes
+        ):
+            jacobian_scale = jacobian_scale[np.newaxis, np.newaxis, ...]
         Jw = np.einsum(
             "i,j,ij...,ij...->ij...",
             self.weights,
@@ -826,16 +841,22 @@ class SpectralElement2D(element.Element):
             np.abs(np.linalg.det(self.compute_deformation_gradient(pos_matrix))),
             jacobian_scale,
         )
-        aux_pad = tuple(np.newaxis for _ in range(len(Jw.shape)-2))
+        aux_pad = tuple(np.newaxis for _ in range(len(Jw.shape) - 2))
         basis_dims = len(self.basis_shape())
         if indices is None:
             return (
                 self.basis_fields() * Jw[*(np.newaxis for _ in range(basis_dims)), ...]
             )
-        indsI = np.array(indices[:basis_dims],dtype=int)
-        indsJ = np.array(indices[basis_dims:],dtype=int)
+        indsI = np.array(indices[:basis_dims], dtype=int)
+        indsJ = np.array(indices[basis_dims:], dtype=int)
         Jw = Jw[*indsJ]
-        return np.where(np.logical_and(indsI[0,...] == indsJ[0,...], indsI[1,...] == indsJ[1,...])[...,*aux_pad], Jw, 0)
+        return np.where(
+            np.logical_and(
+                indsI[0, ...] == indsJ[0, ...], indsI[1, ...] == indsJ[1, ...]
+            )[..., *aux_pad],
+            Jw,
+            0,
+        )
 
     @typing.override
     def integrate_grad_basis_dot_field(
@@ -876,8 +897,10 @@ class SpectralElement2D(element.Element):
         """
         if not isinstance(jacobian_scale, np.ndarray):
             jacobian_scale = np.array(jacobian_scale)
-        if len(jacobian_scale.shape) < 2 or any(jacobian_scale.shape[:2] != self.num_nodes):
-            jacobian_scale = jacobian_scale[np.newaxis,np.newaxis,...]
+        if len(jacobian_scale.shape) < 2 or any(
+            jacobian_scale.shape[:2] != self.num_nodes
+        ):
+            jacobian_scale = jacobian_scale[np.newaxis, np.newaxis, ...]
         if not isinstance(pos_matrix, np.ndarray):
             pos_matrix = np.array(pos_matrix)
         if not isinstance(field, np.ndarray):
@@ -959,14 +982,16 @@ class SpectralElement2D(element.Element):
         # compute using GLL quadrature
         if not isinstance(jacobian_scale, np.ndarray):
             jacobian_scale = np.array(jacobian_scale)
-        if len(jacobian_scale.shape) < 2 or any(jacobian_scale.shape[:2] != self.num_nodes):
-            jacobian_scale = jacobian_scale[np.newaxis,np.newaxis,...]
+        if len(jacobian_scale.shape) < 2 or any(
+            jacobian_scale.shape[:2] != self.num_nodes
+        ):
+            jacobian_scale = jacobian_scale[np.newaxis, np.newaxis, ...]
         if not isinstance(pos_matrix, np.ndarray):
             pos_matrix = np.array(pos_matrix)
         if not isinstance(field, np.ndarray):
             field = np.array(field)
         field_pad = (np.newaxis,) * len(fieldshape)
-        pos_matrix = pos_matrix[...,*field_pad,:]
+        pos_matrix = pos_matrix[..., *field_pad, :]
         def_grad = self.compute_deformation_gradient(pos_matrix)
         # int (grad phi1 . grad field)
         w = np.einsum(
