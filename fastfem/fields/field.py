@@ -37,11 +37,11 @@ def _is_compatible(*shapes: tuple[int, ...]) -> bool:
             lambda xi: all(  # every shape[i] in x[i] must be compatible
                 map(  # recover compatibility boolean
                     lambda fjxi: fjxi[1],
-                    # fj(x[i]) = (maxval , maxval compatible with x[i][j]);  j = 0,...
+                    # fj(x[i]) = (axsize , axsize compatible with x[i][j]);  j = 0,...
                     itertools.accumulate(
                         xi,
                         func=lambda a, b: (
-                            max(a[0], b),
+                            b if b != 1 else a[0],
                             (a[0] == b or a[0] == 1 or b == 1),
                         ),
                         initial=(1, True),
@@ -171,7 +171,9 @@ class Field:
                     (field.basis_shape for field in fields),
                     func=lambda a, b: (
                         a[0] if np.prod(b, dtype=int) == 1 else b,  # nonempty tuple
-                        a[0] == tuple() or a[0] == b,  # if nonempty, did shape change?
+                        (np.prod(a[0], dtype=int) == 1)
+                        or (np.prod(b, dtype=int) == 1)
+                        or a[0] == b,  # if nonempty, did shape change?
                     ),
                     initial=(tuple(), True),
                 ),

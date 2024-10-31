@@ -107,7 +107,7 @@ class Element2D(abc.ABC):
         basis_size = np.prod(basis_shape, dtype=int)
         enumeration = np.unravel_index(np.arange(basis_size), basis_shape)
         field[*enumeration, *enumeration] = 1
-        return FieldType(basis_shape,tuple(),field)
+        return FieldType(basis_shape, tuple(), field)
 
     @abc.abstractmethod
     def reference_element_position_matrix(self) -> FieldType:
@@ -226,7 +226,7 @@ class Element2D(abc.ABC):
         self,
         pos_matrix: FieldType,
         field: FieldType,
-        jacobian_scale: FieldType = FieldType(tuple(),tuple(),1),
+        jacobian_scale: FieldType = FieldType(tuple(), tuple(), 1),
     ) -> NDArray:
         """
         Integrates `field` $f$ over the element. The result is the value of
@@ -255,7 +255,7 @@ class Element2D(abc.ABC):
         pos_matrix: FieldType,
         field: FieldType,
         indices: colltypes.Sequence[ArrayLike] | None = None,
-        jacobian_scale: FieldType = FieldType(tuple(),tuple(),1),
+        jacobian_scale: FieldType = FieldType(tuple(), tuple(), 1),
     ) -> NDArray:
         """
         Computes the integral $\\int \\alpha \\phi_i f ~ dV$
@@ -289,7 +289,7 @@ class Element2D(abc.ABC):
         self,
         pos_matrix: FieldType,
         indices: colltypes.Sequence[np.ndarray] | None = None,
-        jacobian_scale: FieldType = FieldType(tuple(),tuple(),1),
+        jacobian_scale: FieldType = FieldType(tuple(), tuple(), 1),
     ) -> NDArray:
         """
         Recovers the mass matrix entries $\\int \\alpha \\phi_i \\phi_j ~ dV$
@@ -338,7 +338,7 @@ class Element2D(abc.ABC):
         field: FieldType,
         is_field_upper_index: bool,
         indices: colltypes.Sequence[ArrayLike] | None = None,
-        jacobian_scale: FieldType = FieldType(tuple(),tuple(),1),
+        jacobian_scale: FieldType = FieldType(tuple(), tuple(), 1),
     ) -> NDArray:
         """
         Computes the integral $\\int \\alpha \\nabla \\phi_i \\cdot f ~ dV$
@@ -372,7 +372,7 @@ class Element2D(abc.ABC):
         pos_matrix: FieldType,
         field: FieldType,
         indices: colltypes.Sequence[ArrayLike] | None = None,
-        jacobian_scale: FieldType = FieldType(tuple(),tuple(),1),
+        jacobian_scale: FieldType = FieldType(tuple(), tuple(), 1),
     ) -> NDArray:
         """
         Computes the integral $\\int \\alpha \\nabla \\phi_i \\cdot \\nabla f ~ dV$

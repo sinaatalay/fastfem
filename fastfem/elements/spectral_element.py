@@ -917,7 +917,7 @@ class SpectralElement2D(element.Element2D):
         pos_matrix: Field,
         field: Field,
         indices: colltypes.Sequence[ArrayLike] | None = None,
-        jacobian_scale: Field = Field(tuple(),tuple(),1),
+        jacobian_scale: Field = Field(tuple(), tuple(), 1),
     ) -> NDArray:
         """
         Computes the integral $\\int \\alpha \\nabla \\phi_i \\cdot \\nabla f ~ dV$
@@ -986,4 +986,3 @@ class SpectralElement2D(element.Element2D):
         if indices is None:
             return KF
         return KF[*indices, ...]  # type: ignore
-
