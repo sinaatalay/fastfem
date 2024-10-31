@@ -54,9 +54,9 @@ class Geometry:
     which is not done by Gmsh.
 
     Attributes:
-        points (list[Point]): All the created points
-        lines (list[Line]): All the created lines
-        surfaces (list[Surface]): All the created surfaces
+        points: All the created points
+        lines: All the created lines
+        surfaces: All the created surfaces
 
     Methods:
         clear: Clear all the geometric entities.
@@ -87,14 +87,12 @@ class Geometry:
         cls, entity: "Point | Line | Surface"
     ) -> Optional["Point | Line | Surface"]:
         """Check if the entity already exists. If it does, return the existing entity.
-        Otherwise, return None.
 
         Args:
-            entity (Point | Line | Surface): The entity to check if it already exists.
+            entity: The entity to check if it already exists.
 
         Returns:
-            Optional[Point | Line | Surface]: The existing entity if it already exists,
-            otherwise None.
+            The existing entity if it already exists, otherwise None.
         """
         if isinstance(entity, Point):
             comparison = np.isclose(cls._points_coordinates, entity.coordinates).all(
@@ -140,11 +138,10 @@ class Geometry:
         entity. Otherwise, add the entity and return None.
 
         Args:
-            entity (Point | Line | Surface): The entity to be added
+            entity: The entity to be added
 
         Returns:
-            Optional[Point | Line | Surface]: The existing entity if it already exists,
-            otherwise the new entity
+            The existing entity if it already exists, otherwise the new entity
         """
         existing_entity = cls._does_it_already_exist(entity)
         if existing_entity:
@@ -176,10 +173,10 @@ class Geometry:
         """Add a point.
 
         Args:
-            point (Point): The point to be added.
+            point: The point to be added.
 
         Returns:
-            Point: The existing point if it already exists, otherwise None.
+            The existing point if it already exists, otherwise None.
         """
         return cls._add(point)  # type: ignore
 
@@ -188,10 +185,10 @@ class Geometry:
         """Add a line.
 
         Args:
-            line (Line): The line to be added.
+            line: The line to be added.
 
         Returns:
-            Line: The existing line if it already exists, otherwise None.
+            The existing line if it already exists, otherwise None.
         """
         return cls._add(line)  # type: ignore
 
@@ -200,10 +197,10 @@ class Geometry:
         """Add a surface.
 
         Args:
-            surface (Surface): The surface to be added.
+            surface: The surface to be added.
 
         Returns:
-            Surface: The existing surface if it already exists, otherwise None.
+            The existing surface if it already exists, otherwise None.
         """
         return cls._add(surface)  # type: ignore
 
@@ -340,11 +337,10 @@ class Point:
     """Create a point with the given coordinates.
 
     Args:
-        x (float): The x-coordinate of the point.
-        y (float): The y-coordinate of the point.
-        z (float): The z-coordinate of the point.
-        domain_name (Optional[str], optional): The name of the domain the point belongs
-        to. Defaults to None.
+        x: The x-coordinate of the point.
+        y: The y-coordinate of the point.
+        z: The z-coordinate of the point.
+        domain_name: The name of the domain the point belongs to. Defaults to None.
     """
 
     x: float
@@ -415,16 +411,13 @@ class Surface:
     """Create a surface with the given lines.
 
     Args:
-        lines (list[Line]): The lines that form the surface. The lines must be
-        connected (each line's end point is the start point of the next line).
-        transfinite (bool, optional): If True, the surface will be transfinite. All the
-        lines' number_of_nodes argument must be provided if the surface is transfinite.
+        lines: The lines that form the surface. The lines must be connected (each line's
+        end point is the start point of the next line).
+        transfinite: If True, the surface will be transfinite. All the lines'
+        number_of_nodes argument must be provided if the surface is transfinite.
         Defaults to False.
-        element_type (TwoDElementType, optional): The type of element to use. Defaults
-        to "triangle".
-        domain_name (Optional[str], optional): The name of the domain the surface
-        belongs to. Defaults to None.
-
+        element_type: The type of element to use. Defaults to "triangle".
+        domain_name: The name of the domain the surface belongs to. Defaults to None.
     """
 
     lines: list[Line]
@@ -436,11 +429,11 @@ class Surface:
         """Create a surface with the given lines.
 
         Args:
-            lines (list[Line]): The lines that form the surface. The lines must be
+            lines: The lines that form the surface. The lines must be
             connected (each line's end point is the start point of the next line).
-            transfinite (bool, optional): If True, the surface will be transfinite. All
-            the lines' number_of_nodes argument must be provided if the surface is
-            transfinite. Defaults to False.
+            transfinite: If True, the surface will be transfinite. All the lines'
+            number_of_nodes argument must be provided if the surface is transfinite.
+            Defaults to False.
         """
         # Make sure all the lines are transfinite if the surface is transfinite
         if self.transfinite:
