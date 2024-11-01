@@ -117,7 +117,7 @@ class Geometry:
                     return -new_line
 
         elif isinstance(entity, Surface):
-            entity_lines = np.array([line.tag for line in entity.lines])
+            entity_lines = np.array([line.tag for line in entity.outer_lines])
             comparison = np.array(
                 [
                     np.array_equal(line_tag, entity_lines)
@@ -163,7 +163,7 @@ class Geometry:
         elif isinstance(entity, Surface):
             cls._surface_line_tags.append(
                 np.array(
-                    np.array([line.tag for line in entity.lines]),
+                    np.array([line.tag for line in entity.outer_lines]),
                 )
             )
             cls._surfaces.append(entity)
@@ -411,16 +411,19 @@ class Surface:
     """Create a surface with the given lines.
 
     Args:
-        lines: The lines that form the surface. The lines must be connected (each line's
-        end point is the start point of the next line).
-        transfinite: If True, the surface will be transfinite. All the lines'
-        number_of_nodes argument must be provided if the surface is transfinite.
+        outer_lines: The lines that form the surface. The lines must be connected (each
+        line's end point is the start point of the next line).
+        inner_lines: The lines that form the holes in the surface. Defaults to None.
+        transfinite: If True, the surface will be transfinite. If transfinite, all the
+        lines' number_of_nodes argument must be provided, and the surface must have 3 or
+        4 lines, and there should be no inner lines.
         Defaults to False.
-        element_type: The type of element to use. Defaults to "triangle".
+        element_type: The type of element to uFse. Defaults to "triangle".
         domain_name: The name of the domain the surface belongs to. Defaults to None.
     """
 
-    lines: list[Line]
+    outer_lines: list[Line]
+    inner_lines: Optional[list[Line]] = None
     transfinite: bool = False
     element_type: TwoDElementType = "triangle"
     domain_name: Optional[str] = None
@@ -437,49 +440,77 @@ class Surface:
         """
         # Make sure all the lines are transfinite if the surface is transfinite
         if self.transfinite:
-            lines_are_all_transfinite = all([line.transfinite for line in self.lines])
+            lines_are_all_transfinite = all(
+                [line.transfinite for line in self.outer_lines]
+            )
             if not lines_are_all_transfinite:
                 raise ValueError(
                     "If you would like to create a transfinite surface, all the lines'"
                     " number_of_nodes argument must be provided."
                 )
 
-            if len(self.lines) not in [3, 4]:
+            if len(self.outer_lines) not in [3, 4]:
                 raise ValueError("All the transfinite surfaces must have 3 or 4 lines.")
 
         # Make sure the points of lines are connected (each line's end point is the
         # start point of the next line) and lines are in clockwise order:
-        ordered_lines: list[Line] = []
-        current_point_tag = self.lines[0].points[0].tag
-        for line in self.lines:
-            if line.points[0].tag == current_point_tag:
-                ordered_lines.append(line)
-                current_point_tag = line.points[1].tag
-            elif line.points[1].tag == current_point_tag:
-                # If the line is in the opposite direction, use negative tag
-                ordered_lines.append(-line)
-                current_point_tag = line.points[1].tag
-            else:
-                raise ValueError(
-                    "Lines are not properly connected. Make sure the lines are ordered."
-                )
+        def order_lines(lines: list[Line]) -> list[Line]:
+            ordered_lines: list[Line] = []
+            current_point_tag = lines[0].points[0].tag
+            for line in lines:
+                if line.points[0].tag == current_point_tag:
+                    ordered_lines.append(line)
+                    current_point_tag = line.points[1].tag
+                elif line.points[1].tag == current_point_tag:
+                    # If the line is in the opposite direction, use negative tag
+                    ordered_lines.append(-line)
+                    current_point_tag = line.points[1].tag
+                else:
+                    raise ValueError(
+                        "Lines are not properly connected. Make sure the lines are"
+                        " ordered."
+                    )
 
-        # Check if the loop is closed
-        if current_point_tag != self.lines[0].points[0].tag:
+            return ordered_lines
+
+        ordered_outer_lines = order_lines(self.outer_lines)
+        # Check if the loop is closed:
+        if ordered_outer_lines[0].points[0] != ordered_outer_lines[-1].points[1]:
             raise ValueError("Lines do not form a closed loop.")
 
-        self.lines = ordered_lines
+        self.outer_lines = ordered_outer_lines
+
+        if self.inner_lines:
+            ordered_inner_lines = order_lines(self.inner_lines)
+            # Check if the loop is closed:
+            if ordered_inner_lines[0].points[0] != ordered_inner_lines[-1].points[1]:
+                raise ValueError("Inner lines do not form a closed loop.")
+
+            self.inner_lines = ordered_inner_lines
 
         surface = Geometry()._add_surface(self)
         if surface:
             # This surface already exists, send the old surface instead of creating a
             # new one
+            if self.inner_lines != surface.inner_lines:
+                raise ValueError(
+                    "There already exists a surface with the same outer lines but"
+                    " different inner lines. We cannot create both of them as it will"
+                    " cause duplication. Also, we cannot remove the old one since they"
+                    " are not the same."
+                )
             self.__dict__.update(surface.__dict__)
         else:
+            curve_loop_tags = []
             # Create a line loop and a plane surface
-            lines_tags = [line.tag for line in ordered_lines]
-            line_loop_tag = gmsh.model.occ.add_curve_loop(lines_tags)
-            self.tag = gmsh.model.occ.add_plane_surface([line_loop_tag])
+            outer_lines_tags = [line.tag for line in self.outer_lines]
+            curve_loop_tags.append(gmsh.model.occ.add_curve_loop(outer_lines_tags))
+
+            if self.inner_lines:
+                inner_lines_tags = [line.tag for line in self.inner_lines]
+                curve_loop_tags.append(gmsh.model.occ.add_curve_loop(inner_lines_tags))
+
+            self.tag = gmsh.model.occ.add_plane_surface(curve_loop_tags)
 
             if self.transfinite or self.element_type == "quadrangle":
                 gmsh.model.occ.synchronize()

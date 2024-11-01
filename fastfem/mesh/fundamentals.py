@@ -41,7 +41,7 @@ class Rectangle:
             self.transfinite = True
 
         self.surface = Surface(
-            lines=[
+            outer_lines=[
                 Line(
                     Point(0, 0, 0),
                     Point(self.horizontal_length, 0, 0),
