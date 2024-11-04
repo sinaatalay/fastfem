@@ -113,7 +113,7 @@ def test_surface_with_lines_correct_order_but_wrong_orientation():
 
 def test_invalid_domains():
     with pytest.raises(ValueError):
-        l1 = mg.Line(
+        mg.Line(
             mg.Point(0.0, 0.0, 0.0),
             mg.Point(1.0, 0.0, 0.0, domain_name="bottom_boundary"),
             domain_name="bottom_boundary",
@@ -174,12 +174,12 @@ def test_rectangle_mesh(nx, ny, element_type):
     assert "right_boundary" in mesh
     assert "top_boundary" in mesh
     assert "left_boundary" in mesh
-    assert "rectangle" in mesh
+    assert "surface" in mesh
     assert mesh["bottom_boundary"].dimension == 1
     assert mesh["right_boundary"].dimension == 1
     assert mesh["top_boundary"].dimension == 1
     assert mesh["left_boundary"].dimension == 1
-    assert mesh["rectangle"].dimension == 2
+    assert mesh["surface"].dimension == 2
     assert len(list(mesh)) == 5
 
 
@@ -215,10 +215,10 @@ def test_square_mesh(nx, ny, element_type):
     assert "right_boundary" in mesh
     assert "top_boundary" in mesh
     assert "left_boundary" in mesh
-    assert "rectangle" in mesh
+    assert "surface" in mesh
     assert mesh["bottom_boundary"].dimension == 1
     assert mesh["right_boundary"].dimension == 1
     assert mesh["top_boundary"].dimension == 1
     assert mesh["left_boundary"].dimension == 1
-    assert mesh["rectangle"].dimension == 2
+    assert mesh["surface"].dimension == 2
     assert len(list(mesh)) == 5
