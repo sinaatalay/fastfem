@@ -9,11 +9,21 @@ already exists.
 import copy
 from typing import Literal, Optional, Any
 import dataclasses
+import pathlib
 
 import gmsh
 import numpy as np
 
-__all__ = ["TwoDElementType", "Point", "Line", "Surface", "Geometry"]
+__all__ = [
+    "ZeroDElementType",
+    "OneDElementType",
+    "TwoDElementType",
+    "Mesh",
+    "Point",
+    "Line",
+    "Surface",
+    "mesh",
+]
 
 
 def __dir__() -> list[str]:
@@ -29,7 +39,7 @@ OneDElementType = Literal["line"]
 TwoDElementType = Literal["triangle", "quadrangle"]
 
 gmsh_element_type_dictionary: dict[
-    int, ZeroDElementType | OneDElementType | TwoDElementType
+    Literal[1, 2, 3, 15], ZeroDElementType | OneDElementType | TwoDElementType
 ] = {
     1: "line",
     2: "triangle",
@@ -39,12 +49,32 @@ gmsh_element_type_dictionary: dict[
 
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
-class Mesh:
+class Submesh:
     type: ZeroDElementType | OneDElementType | TwoDElementType
-    node_tags: np.ndarray
-    coordinates_of_nodes: np.ndarray
-    element_tags: np.ndarray
-    nodes_of_elements: np.ndarray
+    node_tags: np.ndarray[tuple[Any, Literal[1]], np.dtype[np.int64]]
+    coordinates_of_nodes: np.ndarray[tuple[Any, Literal[3]], np.dtype[np.float64]]
+    element_tags: np.ndarray[tuple[Any, Literal[1]], np.dtype[np.int64]]
+    nodes_of_elements: np.ndarray[tuple[Any, Literal[3]], np.dtype[np.int64]]
+
+
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class Domain:
+    name: str
+    tag: int
+    mesh: list[Submesh]
+
+
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class Mesh:
+    domains: list[Domain]
+
+    def __getitem__(self, key: str) -> Domain:
+        # Return the domain with the given name:
+        for domain in self.domains:
+            if domain.name == key:
+                return domain
+
+        raise KeyError(f"Domain with the name {key} does not exist.")
 
 
 class Geometry:
@@ -252,14 +282,12 @@ class Geometry:
             cls._domains[domain_name, dim] = domain_tag
 
     @classmethod
-    def mesh(cls) -> dict[tuple[str, int], list[Mesh]]:
+    def mesh(cls) -> Mesh:
         """Generate the mesh using Gmsh."""
         cls.create_domains()
         gmsh.model.mesh.generate()
 
-        # mesh = {(domain_name, tag): [Mesh1, Mesh2]}
-        mesh: dict[tuple[str, int], list[Mesh]] = {}
-
+        domains: list[Domain] = []
         for domain_name_and_dim, domain_tag in cls._domains.items():
             name = domain_name_and_dim[0]
             dim = domain_name_and_dim[1]
@@ -299,11 +327,12 @@ class Geometry:
                                 ]
                             )
                         )
+
             # For each element type, create a Mesh object and append it to the meshes:
-            meshes: list[Mesh] = []
+            meshes: list[Submesh] = []
             for element_type, elements_and_nodes in types_and_elements.items():
                 meshes.append(
-                    Mesh(
+                    Submesh(
                         type=element_type,
                         node_tags=tags_of_nodes,  # type: ignore
                         coordinates_of_nodes=coordinates_of_nodes,  # type: ignore
@@ -312,9 +341,9 @@ class Geometry:
                     )
                 )
 
-            mesh[name, domain_tag] = meshes
+            domains.append(Domain(name=name, tag=domain_tag, mesh=meshes))
 
-        return mesh
+        return Mesh(domains=domains)
 
     @property
     def points(self) -> list["Point"]:
@@ -368,9 +397,9 @@ class Line:
         start_point (Point): The start point of the line.
         end_point (Point): The end point of the line.
         number_of_nodes (Optional[int], optional): The number of nodes on the line. If
-        provided, the line will be transfinite. Defaults to None.
+            provided, the line will be transfinite. Defaults to None.
         domain_name (Optional[str], optional): The name of the domain the line belongs
-        to. Defaults to None.
+            to. Defaults to None.
     """
 
     start_point: Point
@@ -412,14 +441,14 @@ class Surface:
 
     Args:
         outer_lines: The lines that form the surface. The lines must be connected (each
-        line's end point is the start point of the next line).
+            line's end point is the start point of the next line).
         inner_lines: The lines that form the holes in the surface. Defaults to None.
         transfinite: If True, the surface will be transfinite. If transfinite, all the
-        lines' number_of_nodes argument must be provided, and the surface must have 3 or
-        4 lines, and there should be no inner lines.
-        Defaults to False.
+            lines' number_of_nodes argument must be provided, and the surface must have
+            3 or 4 lines, and there should be no inner lines. Defaults to False.
         element_type: The type of element to uFse. Defaults to "triangle".
-        domain_name: The name of the domain the surface belongs to. Defaults to None.
+            domain_name: The name of the domain the surface belongs to. Defaults to
+                None.
     """
 
     outer_lines: list[Line]
@@ -433,10 +462,10 @@ class Surface:
 
         Args:
             lines: The lines that form the surface. The lines must be
-            connected (each line's end point is the start point of the next line).
+                connected (each line's end point is the start point of the next line).
             transfinite: If True, the surface will be transfinite. All the lines'
-            number_of_nodes argument must be provided if the surface is transfinite.
-            Defaults to False.
+                number_of_nodes argument must be provided if the surface is transfinite.
+                Defaults to False.
         """
         # Make sure all the lines are transfinite if the surface is transfinite
         if self.transfinite:
@@ -520,3 +549,24 @@ class Surface:
 
             if self.element_type == "quadrangle":
                 gmsh.model.mesh.set_recombine(2, self.tag)
+
+
+def mesh(file_name: Optional[pathlib.Path] = None) -> Mesh:
+    """Create a mesh from all the created geometric entities so far and return it as a
+    `Mesh` object. If a file name is provided, write the mesh to the file in the Gmsh
+    format.
+
+    Args:
+        file_name: The name of the file to write the mesh to. For example, "mesh.msh".
+
+    Returns:
+        The mesh as a `Mesh` object.
+    """
+    mesh = Geometry().mesh()
+
+    if file_name:
+        gmsh.write(file_name)
+
+    Geometry().clear()
+
+    return mesh
