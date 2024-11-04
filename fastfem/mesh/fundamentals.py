@@ -1,13 +1,52 @@
-from typing import Optional
 import pathlib
+from typing import Final, Literal, Optional
 
-from .generator import Line, Point, Surface, TwoDElementType, Mesh, mesh
+from .generator import Domain, Line, Mesh, Point, Surface, TwoDElementType, mesh
 
 __all__ = ["create_a_rectangle_mesh", "create_a_square_mesh"]
 
 
 def __dir__() -> list[str]:
     return __all__
+
+
+RectangleDomainName = Literal[
+    "bottom_boundary",
+    "right_boundary",
+    "top_boundary",
+    "left_boundary",
+    "rectangle",
+]
+
+SquareDomainName = Literal[
+    "bottom_boundary",
+    "right_boundary",
+    "top_boundary",
+    "left_boundary",
+    "square",
+]
+
+
+class RectangleMesh(Mesh):
+    """A class that is identical to the `Mesh` class, but with typing hints for a
+    rectangle mesh."""
+
+    def __getitem__(  # type: ignore
+        self,
+        key: RectangleDomainName,
+    ) -> Domain:
+        return self[key]
+
+
+class SquareMesh(Mesh):
+    """A class that is identical to the `Mesh` class, but with typing hints for a
+    square mesh."""
+
+    def __getitem__(  # type: ignore
+        self,
+        key: SquareDomainName,
+    ) -> Domain:
+        return self[key]
 
 
 def create_a_rectangle_mesh(
@@ -17,7 +56,7 @@ def create_a_rectangle_mesh(
     nodes_in_vertical_direction: Optional[int] = None,
     element_type: TwoDElementType = "quadrangle",
     file_name: Optional[pathlib.Path] = None,
-) -> Mesh:
+) -> RectangleMesh:
     """Create a 2D mesh of a rectangle.
 
     Args:

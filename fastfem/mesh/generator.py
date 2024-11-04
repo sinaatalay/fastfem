@@ -7,9 +7,9 @@ already exists.
 """
 
 import copy
-from typing import Literal, Optional, Any
 import dataclasses
 import pathlib
+from typing import Any, Literal, Optional
 
 import gmsh
 import numpy as np
@@ -19,6 +19,8 @@ __all__ = [
     "OneDElementType",
     "TwoDElementType",
     "Mesh",
+    "Submesh",
+    "Domain",
     "Point",
     "Line",
     "Surface",
@@ -61,6 +63,7 @@ class Submesh:
 class Domain:
     name: str
     tag: int
+    dimension: int
     mesh: list[Submesh]
 
 
@@ -69,12 +72,35 @@ class Mesh:
     domains: list[Domain]
 
     def __getitem__(self, key: str) -> Domain:
-        # Return the domain with the given name:
+        """Return the mesh of the domain with the given name.
+
+        Args:
+            key: The name of the domain.
+
+        Returns:
+            List of submeshes of the domain. Submeshes are required because each domain
+            can have multiple element types.
+        """
         for domain in self.domains:
             if domain.name == key:
                 return domain
 
         raise KeyError(f"Domain with the name {key} does not exist.")
+
+    def __contains__(self, key: str) -> bool:
+        """Check if the mesh has a domain with the given name.
+
+        Args:
+            key: The name of the domain.
+
+        Returns:
+            True if the domain exists, otherwise False.
+        """
+        return any(domain.name == key for domain in self.domains)
+
+    def __iter__(self):
+        """Return an iterator over the domains."""
+        return iter(self.domains)
 
 
 class Geometry:
@@ -341,7 +367,9 @@ class Geometry:
                     )
                 )
 
-            domains.append(Domain(name=name, tag=domain_tag, mesh=meshes))
+            domains.append(
+                Domain(name=name, tag=domain_tag, mesh=meshes, dimension=dim)
+            )
 
         return Mesh(domains=domains)
 

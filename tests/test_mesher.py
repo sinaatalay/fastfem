@@ -1,8 +1,8 @@
+import gmsh
 import pytest
 
 import fastfem.mesh as m
 import fastfem.mesh.generator as mg
-import gmsh
 
 
 def setup_function(function):
@@ -163,13 +163,24 @@ def test_valid_domains():
     ],
 )
 def test_rectangle_mesh(nx, ny, element_type):
-    m.Rectangle(
+    mesh = m.create_a_rectangle_mesh(
         horizontal_length=1.0,
         vertical_length=1.0,
         nodes_in_horizontal_direction=nx,
         nodes_in_vertical_direction=ny,
         element_type=element_type,
     )
+    assert "bottom_boundary" in mesh
+    assert "right_boundary" in mesh
+    assert "top_boundary" in mesh
+    assert "left_boundary" in mesh
+    assert "rectangle" in mesh
+    assert mesh["bottom_boundary"].dimension == 1
+    assert mesh["right_boundary"].dimension == 1
+    assert mesh["top_boundary"].dimension == 1
+    assert mesh["left_boundary"].dimension == 1
+    assert mesh["rectangle"].dimension == 2
+    assert len(list(mesh)) == 5
 
 
 @pytest.mark.parametrize(
@@ -194,9 +205,20 @@ def test_rectangle_mesh(nx, ny, element_type):
     ],
 )
 def test_square_mesh(nx, ny, element_type):
-    m.Square(
+    mesh = m.create_a_square_mesh(
         side_length=1.0,
         nodes_in_horizontal_direction=nx,
         nodes_in_vertical_direction=ny,
         element_type=element_type,
     )
+    assert "bottom_boundary" in mesh
+    assert "right_boundary" in mesh
+    assert "top_boundary" in mesh
+    assert "left_boundary" in mesh
+    assert "rectangle" in mesh
+    assert mesh["bottom_boundary"].dimension == 1
+    assert mesh["right_boundary"].dimension == 1
+    assert mesh["top_boundary"].dimension == 1
+    assert mesh["left_boundary"].dimension == 1
+    assert mesh["rectangle"].dimension == 2
+    assert len(list(mesh)) == 5
