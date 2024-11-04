@@ -59,7 +59,7 @@ readme = "README.md"
 requires-python = '>=3.12'
 # The package depends on the packages below. They will be installed automatically when
 # the package is installed by users.
-dependencies = ["jax==0.4.33", "matplotlib==3.9.2"]
+dependencies = ["jax==0.4.35", "matplotlib==3.9.2"]
 classifiers = [
     "Intended Audience :: Science/Research",
     "Intended Audience :: Education",
