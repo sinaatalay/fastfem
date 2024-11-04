@@ -9,6 +9,7 @@ edit_uri: edit/main/docs/
 
 nav:
   - Home: index.md
+  - Theory: theory.md
   - User Guide: user_guide/index.md
   - Developer Guide:
       - Developer Guide: developer_guide/index.md
@@ -96,7 +97,7 @@ plugins:
 
   - bibtex: # https://github.com/shyamd/mkdocs-bibtex
       bib_file: docs/assets/bibliography.bib
-      bib_by_default: false
+      bib_by_default: true
 
   - caption: # https://github.com/tobiasah/mkdocs-caption
       table:
@@ -109,3 +110,5 @@ extra_javascript:
 
 extra_css:
   - https://unpkg.com/katex@0/dist/katex.min.css
+
+
