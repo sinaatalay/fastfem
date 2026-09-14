@@ -454,7 +454,7 @@ class Point:
     x: float
     y: float
     z: float
-    domain_name: Optional[str] = None
+    domain_name: str | None = None
 
     def __post_init__(self):
         self.coordinates = (self.x, self.y, self.z)
@@ -483,8 +483,8 @@ class Line:
 
     start_point: Point
     end_point: Point
-    number_of_nodes: Optional[int] = None
-    domain_name: Optional[str] = None
+    number_of_nodes: int | None = None
+    domain_name: str | None = None
 
     def __post_init__(
         self,
@@ -531,10 +531,10 @@ class Surface:
     """
 
     outer_lines: list[Line]
-    inner_lines: Optional[list[Line]] = None
+    inner_lines: list[Line] | None = None
     transfinite: bool = False
     element_type: TwoDElementType = "triangle"
-    domain_name: Optional[str] = None
+    domain_name: str | None = None
 
     def __post_init__(self):
         # Make sure all the lines are transfinite if the surface is transfinite
@@ -627,7 +627,7 @@ class Surface:
                 gmsh.model.mesh.set_recombine(2, self.tag)
 
 
-def mesh(file_name: Optional[pathlib.Path] = None) -> Mesh:
+def mesh(file_name: pathlib.Path | None = None) -> Mesh:
     """Create a mesh from all the created geometric entities so far and return it as a
     `Mesh` object. If a file name is provided, write the mesh to the file in the Gmsh
     format.

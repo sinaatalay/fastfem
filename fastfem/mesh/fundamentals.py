@@ -1,6 +1,6 @@
 import dataclasses
 import pathlib
-from typing import Literal, Optional
+from typing import Literal
 
 from .generator import (
     Domain,
@@ -37,8 +37,8 @@ class Rectangle:
 
     horizontal_length: float
     vertical_length: float
-    nodes_in_horizontal_direction: Optional[int] = None
-    nodes_in_vertical_direction: Optional[int] = None
+    nodes_in_horizontal_direction: int | None = None
+    nodes_in_vertical_direction: int | None = None
     element_type: TwoDElementType = "quadrangle"
 
     def __post_init__(
@@ -132,10 +132,10 @@ class SquareMesh(RectangleMesh): ...
 def create_a_rectangle_mesh(
     horizontal_length: float,
     vertical_length: float,
-    nodes_in_horizontal_direction: Optional[int] = None,
-    nodes_in_vertical_direction: Optional[int] = None,
+    nodes_in_horizontal_direction: int | None = None,
+    nodes_in_vertical_direction: int | None = None,
     element_type: TwoDElementType = "quadrangle",
-    file_name: Optional[pathlib.Path] = None,
+    file_name: pathlib.Path | None = None,
 ) -> RectangleMesh:
     """Create a 2D mesh of a rectangle.
 
@@ -196,10 +196,10 @@ def create_a_rectangle_mesh(
 
 def create_a_square_mesh(
     side_length: float,
-    nodes_in_horizontal_direction: Optional[int] = None,
-    nodes_in_vertical_direction: Optional[int] = None,
+    nodes_in_horizontal_direction: int | None = None,
+    nodes_in_vertical_direction: int | None = None,
     element_type: TwoDElementType = "quadrangle",
-    file_name: Optional[pathlib.Path] = None,
+    file_name: pathlib.Path | None = None,
 ) -> SquareMesh:
     """Create a 2D mesh of a square.
 

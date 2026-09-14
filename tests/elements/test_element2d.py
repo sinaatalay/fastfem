@@ -95,9 +95,9 @@ def element(request):
 def element_and_local_coords(request):
     key = request.param
     coords = element_test_localcoords[key]
-    assert (
-        key in elements_to_test
-    ), f"Element {key} found in element_test_localcoords, but not elements_to_test."
+    assert key in elements_to_test, (
+        f"Element {key} found in element_test_localcoords, but not elements_to_test."
+    )
     assert coords.shape[-1] == 2, (
         f"Last axis of element_test_localcoords['{key}'] is not size 2! shape is"
         f" {coords.shape}."
