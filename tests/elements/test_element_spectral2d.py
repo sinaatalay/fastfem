@@ -122,13 +122,13 @@ def test_lagrange_poly_coefs1D(element):
             elem._lagrange_derivs[deriv_order],
             P,
             err_msg=(
-                f"derivative L^{({deriv_order})} is not being set properly in the"
+                f"derivative L^{ ({deriv_order}) } is not being set properly in the"
                 " dictionary!"
             ),
         )
-        assert set(elem._lagrange_derivs) == set(
-            np.arange(deriv_order + 1)
-        ), "Expected dictionary keys not found! Are they being improperly stored?"
+        assert set(elem._lagrange_derivs) == set(np.arange(deriv_order + 1)), (
+            "Expected dictionary keys not found! Are they being improperly stored?"
+        )
 
     for deriv_order in range(1, elem.degree + 1):
         num_terms = elem.degree + 1 - deriv_order
@@ -159,7 +159,7 @@ def test_lagrange_poly_coefs1D(element):
             decimal=sigfigs,
             err_msg=(
                 f"derivative L^({deriv_order}) does not match the central difference on"
-                f" L^({deriv_order-1})!"
+                f" L^({deriv_order - 1})!"
             ),
         )
 
@@ -183,12 +183,12 @@ def test_lagrange_evals1D(element, broadcastable_shapes):
 
         eval_pts = elem.lagrange_eval1D(deriv_order, test_indices, test_points)
         eval_alls = elem.lagrange_eval1D(deriv_order, test_indices, None)
-        assert (
-            eval_pts.shape == broadcastable_shapes[2]
-        ), "Did not broadcast into the right shape!"
-        assert eval_alls.shape == broadcastable_shapes[0] + (
-            elem.num_nodes,
-        ), "Did not broadcast into the right shape!"
+        assert eval_pts.shape == broadcastable_shapes[2], (
+            "Did not broadcast into the right shape!"
+        )
+        assert eval_alls.shape == broadcastable_shapes[0] + (elem.num_nodes,), (
+            "Did not broadcast into the right shape!"
+        )
 
         degp1 = elem.degree + 1 - deriv_order  # degree+1 of P
         Pknots = np.einsum(
@@ -472,7 +472,7 @@ def test_gll_build(deg):
         res_true = 2 / (i + 1)
         assert quad == pytest.approx(res_true, abs=1e-8), (
             "GLL quadrature must be exact for polynomials up to degree 2n-1"
-            f" ({2*deg - 1})! " + f"Failed at degree {i}."
+            f" ({2 * deg - 1})! " + f"Failed at degree {i}."
         )
 
     # verify L

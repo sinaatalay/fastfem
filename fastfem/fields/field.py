@@ -42,8 +42,10 @@ def _is_broadcastable(base: tuple[int, ...], *shapes: tuple[int, ...]) -> bool:
     """
     return all(
         map(
-            lambda x: x[0] is not None
-            and all(xi == x[0] or xi == 1 or xi is None for xi in x[1:]),
+            lambda x: (
+                x[0] is not None
+                and all(xi == x[0] or xi == 1 or xi is None for xi in x[1:])
+            ),
             itertools.zip_longest(
                 reversed(base), *(reversed(shape) for shape in shapes), fillvalue=None
             ),
@@ -823,7 +825,7 @@ class Field:
         ):
             message = (
                 f"Cannot broadcast field of shape {self.shape} into"
-                f" shape {(stack_shape,basis_shape,point_shape)}"
+                f" shape {(stack_shape, basis_shape, point_shape)}"
             )
             raise FieldShapeError(message)
         slices: list[typing.Any] = [None, None, None]
@@ -1033,7 +1035,7 @@ class Field:
         if ind < 0:
             if out_of_bounds_check and ind < -len(shape):
                 message = (
-                    f"Attempting to access axis {ind} ({-1-ind}) of shape {shape}."
+                    f"Attempting to access axis {ind} ({-1 - ind}) of shape {shape}."
                 )
                 raise IndexError(message)
             ind = len(shape) + ind

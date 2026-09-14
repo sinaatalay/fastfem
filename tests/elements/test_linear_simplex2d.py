@@ -192,18 +192,18 @@ def test_integrate_reftri(triangle_quadrature):
                     reftri_mesh[:, 2, :] - reftri_mesh[:, 0, :],
                 )
             )
-            assert res == pytest.approx(
-                analytic, rel=1e-5
-            ), f"Failed _analytic_integrate_reftri({powx},{powy})"
+            assert res == pytest.approx(analytic, rel=1e-5), (
+                f"Failed _analytic_integrate_reftri({powx},{powy})"
+            )
             for exactdeg in range(powx + powy, 10):
                 quad_rule = triangle_quadrature(exactdeg)
                 quad_result = np.sum(
                     quad_rule.weights
                     * (quad_rule.knots[:, 0] ** powx * quad_rule.knots[:, 1] ** powy)
                 )
-                assert quad_result == pytest.approx(
-                    res, rel=1e-9
-                ), f"Failed exactness for x**{powx} * y**{powy} for DOE {exactdeg}."
+                assert quad_result == pytest.approx(res, rel=1e-9), (
+                    f"Failed exactness for x**{powx} * y**{powy} for DOE {exactdeg}."
+                )
 
 
 def test_interpolate_field(element):

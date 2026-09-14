@@ -38,7 +38,7 @@ def assemble_field_add(
     if node_indices.shape[-len(subelem_basis_shape) :] != subelem_basis_shape:
         message = (
             "The last axes of node_indices must match the basis shape!"
-            f" ({node_indices.shape[-len(subelem_basis_shape):]} != basis shape"
+            f" ({node_indices.shape[-len(subelem_basis_shape) :]} != basis shape"
             f" {subelem_basis_shape}; node_indices.shape = {node_indices.shape})"
         )
         raise ValueError(message)
@@ -49,8 +49,8 @@ def assemble_field_add(
     ):
         message = (
             "The first axes of node_indices must match the first axes of the stack"
-            f" shape! ({node_indices.shape[:-len(subelem_basis_shape)]} !="
-            f" {disassembled_field.stack_shape[:len(assembly_stack_shape)]};"
+            f" shape! ({node_indices.shape[: -len(subelem_basis_shape)]} !="
+            f" {disassembled_field.stack_shape[: len(assembly_stack_shape)]};"
             f" node_indices.shape = {node_indices.shape}; stack_shape ="
             f" {disassembled_field.stack_shape})"
         )
